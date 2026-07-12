@@ -1,4 +1,4 @@
-import { CalendarDays, CheckSquare, Clock, CloudSun, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Settings, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Settings, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
 import type { ReactNode } from "react";
 import { nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
@@ -25,9 +25,10 @@ interface WidgetGalleryProps {
   selectedWidgetId: string | null;
   onSelectWidget: (id: string | null) => void;
   onSettings: () => void;
+  onOpenDeveloper?: (id: string) => void;
 }
 
-export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings }: WidgetGalleryProps) {
+export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, onOpenDeveloper }: WidgetGalleryProps) {
   const widgets = useWidgetStore((state) => state.widgets);
   const addWidget = useWidgetStore((state) => state.addWidget);
   const duplicateWidget = useWidgetStore((state) => state.duplicateWidget);
@@ -111,7 +112,8 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings }: 
                     <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                       <IconButton label="Open overlay" onClick={() => openOverlay(widget)} icon={<Pin size={12} />} />
                       <IconButton label="Hide overlay" onClick={() => { updateWidget(widget.id, { pinned: false, locked: false }); void nativeApi.closeWidgetWindow(widget.id).catch(() => undefined); }} icon={<EyeOff size={12} />} />
-                      <IconButton label="Duplicate" onClick={() => duplicateWidget(widget.id)} icon={<Copy size={12} />} />
+                       <IconButton label="Duplicate" onClick={() => duplicateWidget(widget.id)} icon={<Copy size={12} />} />
+                      {widget.type === "custom" && onOpenDeveloper && <IconButton label="Edit in builder" onClick={() => onOpenDeveloper(widget.id)} icon={<Code2 size={12} />} />}
                       <IconButton label="Delete" danger onClick={() => removeEverywhere(widget.id)} icon={<Trash2 size={12} />} />
                     </span>
                   </div>

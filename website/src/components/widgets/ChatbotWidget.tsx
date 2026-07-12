@@ -10,6 +10,15 @@ interface Message {
   text: string;
 }
 
+type ReasoningEffort = "low" | "medium" | "high" | "max";
+
+const REASONING_OPTIONS: Array<{ value: ReasoningEffort; label: string }> = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "max", label: "Max" },
+];
+
 const PERSONAS = [
   { id: "assistant", label: "Assistant", icon: <Bot size={13} />, description: "Helpful companion" },
   { id: "motivator", label: "Motivator", icon: <Sparkles size={13} />, description: "Your biggest fan" },
@@ -52,6 +61,9 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
   const updateWidget = useWidgetStore((state) => state.updateWidget);
   const messages = (widget.data?.messages as Message[]) ?? [];
   const currentPersona = String(widget.data?.persona ?? "assistant");
+  const reasoningEffort = (REASONING_OPTIONS.some((option) => option.value === widget.data?.reasoningEffort)
+    ? widget.data?.reasoningEffort
+    : "high") as ReasoningEffort;
   
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -93,7 +105,8 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
           },
           body: JSON.stringify({
             messages: nextMessages.map(m => ({ role: m.role, text: m.text })),
-            persona: currentPersona
+            persona: currentPersona,
+            reasoning_effort: reasoningEffort
           })
         });
         
@@ -200,13 +213,27 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
             );
           })}
         </div>
-        <button
-          onClick={handleClear}
-          title="Clear chat history"
-          className="rounded-md p-1 text-muted hover:bg-black/10 hover:text-red-500 dark:hover:bg-white/10"
-        >
-          <Trash2 size={13} />
-        </button>
+        <div className="flex items-center gap-1">
+          <label className="sr-only" htmlFor={`reasoning-effort-${widget.id}`}>Reasoning effort</label>
+          <select
+            id={`reasoning-effort-${widget.id}`}
+            value={reasoningEffort}
+            onChange={(event) => updateWidget(widget.id, {
+              data: { ...widget.data, reasoningEffort: event.target.value as ReasoningEffort }
+            })}
+            title="Reasoning effort"
+            className="max-w-[74px] rounded-md border border-black/10 bg-black/5 px-1.5 py-1 text-[10px] text-muted outline-none focus:ring-2 focus:ring-accent/50 dark:border-white/10 dark:bg-white/5"
+          >
+            {REASONING_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <button
+            onClick={handleClear}
+            title="Clear chat history"
+            className="rounded-md p-1 text-muted hover:bg-black/10 hover:text-red-500 dark:hover:bg-white/10"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Messages Window */}

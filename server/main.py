@@ -13,6 +13,7 @@ from server.database import engine, Base, get_db
 from server.models import User, Layout
 from server.schemas import UserCreate, UserLogin, UserResponse, TokenResponse, LayoutSyncRequest, LayoutSyncResponse, ChatRequest, ChatResponse
 from server.auth import hash_password, verify_password, create_access_token, get_current_user
+from server.ai import complete_chat
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -259,51 +260,20 @@ async def update_layout(
     return layout
 
 @app.post("/api/chatbot/chat", response_model=ChatResponse)
-def chatbot_chat(
+async def chatbot_chat(
     payload: ChatRequest,
     user: User = Depends(get_current_user)
 ):
     if not settings.OPENAI_API_KEY:
-        # Fallback if OPENAI_API_KEY is not configured
-        fallback_responses = {
-            "assistant": "Hello! I am your local assistant. To unlock real AI responses, please set the OPENAI_API_KEY in your server's .env file.",
-            "motivator": "You are doing amazing! Set your OPENAI_API_KEY on the backend to supercharge this motivator with real AI advice!",
-            "joker": "Why do programmers wear glasses? Because they can't C#! Set the OPENAI_API_KEY to hear more real AI jokes!",
-            "coder": "Clean code is key. Rubber-duck debug with me by setting your OPENAI_API_KEY in the backend!"
-        }
-        reply = fallback_responses.get(payload.persona, fallback_responses["assistant"])
-        return ChatResponse(reply=reply)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI chat is not configured. Set OPENAI_API_KEY on the backend.",
+        )
 
     try:
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL if settings.OPENAI_BASE_URL else None
-        )
-        
-        system_prompts = {
-            "assistant": "You are a helpful companion for Widget Studio. Help the user manage clocks, weather, and notes widgets.",
-            "motivator": "You are a high-energy motivational assistant. Help the user get stuff done!",
-            "joker": "You are a developer joker. Respond with coding jokes or developer humor.",
-            "coder": "You are a coding partner. Help the user write clean, optimized code and resolve bugs."
-        }
-        system_message = system_prompts.get(payload.persona, system_prompts["assistant"])
-        
-        messages = [{"role": "system", "content": system_message}]
-        for msg in payload.messages:
-            role = "assistant" if msg.role == "assistant" else "user"
-            messages.append({"role": role, "content": msg.text})
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=250
-        )
-        
-        reply = response.choices[0].message.content.strip()
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=await complete_chat(payload))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"OpenAI completion failed: {str(e)}"
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI provider request failed: {str(e)}"
         )

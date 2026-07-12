@@ -5,6 +5,7 @@ import { loadPersistedState, savePersistedState } from "./lib/storage";
 import { nativeApi } from "./lib/tauri";
 import { useSettingsStore } from "./store/settingsStore";
 import { createWidget, useWidgetStore } from "./store/widgetStore";
+import { customWidgetDataFromDraft } from "./types/customWidget";
 import { WidgetGallery } from "./components/layout/WidgetGallery";
 import { WidgetFrame } from "./components/layout/WidgetFrame";
 import { WidgetInspector } from "./components/layout/WidgetInspector";
@@ -34,6 +35,7 @@ export default function App() {
   const [canvasZoom, setCanvasZoom] = useState(100);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([]);
+  const [developerWidgetId, setDeveloperWidgetId] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
 
   const reportError = (error: any, context: string) => {
@@ -268,25 +270,19 @@ export default function App() {
             </div>
             
             <div className="flex flex-1 min-h-0 gap-2">
-              <ManagerNavigation view={managerView} onView={setManagerView} onSearch={() => setSearchOpen(true)} />
+              <ManagerNavigation view={managerView} onView={(view) => { if (view === "developer") setDeveloperWidgetId(null); setManagerView(view); }} onSearch={() => setSearchOpen(true)} />
               {managerView !== "widgets" ? (
                 <ManagerPage 
                   view={managerView} 
                   widgets={widgets} 
                   onSetWidgets={setWidgets} 
-                  onCreateWidget={(type,name,data)=>{
-                    const widget=createWidget(type,widgets.length);
-                    widget.name=name;
-                    widget.data=data;
-                    setWidgets([...widgets,widget]);
-                    setSelectedWidgetId(widget.id);
-                    setManagerView("widgets")
-                  }} 
+                  editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null}
+                  onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }}
                   onOpenWidgets={() => setManagerView("widgets")} 
                 />
               ) : (
                 <>
-                  <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onSettings={() => setManagerView("settings")} />
+                   <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onSettings={() => setManagerView("settings")} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
                   <section
                     className="widget-canvas relative flex-1 overflow-hidden"
                     onPointerDown={(event) => {
@@ -343,7 +339,7 @@ export default function App() {
                       <button className="icon-tile" onClick={()=>updateSetting("theme",settings.theme==="dark"?"light":"dark")}><Moon size={14} /></button>
                     </div>
                   </section>
-                  <WidgetInspector widget={selectedWidget} onSelectWidget={setSelectedWidgetId} />
+                   <WidgetInspector widget={selectedWidget} onSelectWidget={setSelectedWidgetId} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
                 </>
               )}
             </div>

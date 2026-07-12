@@ -6,6 +6,7 @@ import { useManagerStore } from "../../store/managerStore";
 import { nativeApi, type SystemInfo } from "../../lib/tauri";
 import { useAuthStore, BACKEND_URL } from "../../store/authStore";
 import { savePersistedState } from "../../lib/storage";
+import { WidgetBuilder } from "../developer/WidgetBuilder";
 
 
 
@@ -276,12 +277,16 @@ function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidge
   const validateWidget = (w: any): w is DesktopWidget => {
     if (!w || typeof w !== "object") return false;
     if (typeof w.name !== "string" || !w.name) return false;
-    const kinds: WidgetKind[] = ["clock", "weather", "todo", "notes", "system", "links", "calendar", "custom", "mindmap"];
+    const kinds: WidgetKind[] = ["clock", "weather", "todo", "notes", "system", "links", "calendar", "custom", "mindmap", "pomodoro", "worldclock", "stickynotes", "calculator", "chatbot"];
     if (!kinds.includes(w.type)) return false;
     if (!w.rect || typeof w.rect !== "object") return false;
     const { x, y, width, height } = w.rect;
     if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") return false;
     if (!w.settings || typeof w.settings !== "object") return false;
+    if (w.type === "custom" && w.data?.source) {
+      const source = w.data.source;
+      if (typeof source !== "object" || typeof source.html !== "string" || typeof source.css !== "string" || typeof source.js !== "string") return false;
+    }
     return true;
   };
 
@@ -300,8 +305,6 @@ function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidge
 
   return <Page title="Import & export" subtitle="Share widget configurations as portable JSON files."><div className="grid grid-cols-2 gap-4"><div className="feature-card flex-col items-start"><Download size={25}/><b>Import widgets</b><p>Select a Widget Studio JSON export. Imported widgets receive new IDs and are added to your workspace.</p><label className="primary-action cursor-pointer">Choose file<input className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></label></div><div className="feature-card flex-col items-start"><Cloud size={25}/><b>Export all widgets</b><p>Export {widgets.length} configured widget(s), including appearance, position and widget data.</p><button className="primary-action" disabled={!widgets.length} onClick={exportAll}>Export JSON</button></div></div>{message&&<div className={`content-panel mt-4 text-sm ${isError ? "border-red-500 bg-red-50 text-red-700" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"}`}>{message}</div>}<Panel title="Individual widgets"><div className="space-y-2">{widgets.map(w=><div className="flex items-center rounded-lg bg-black/5 p-3 text-sm" key={w.id}><b>{w.name}</b><span className="ml-2 text-xs text-muted">{w.type}</span><button className="ml-auto text-indigo-600 dark:text-indigo-400 font-semibold" onClick={()=>downloadJson(`${safeName(w.name)}.widget.json`,{version:2,widgets:[w]})}>Export</button></div>)}</div></Panel></Page>
 }
-
-function DeveloperPage({onCreateWidget}:{onCreateWidget:(type:WidgetKind,name:string,data:Record<string,unknown>)=>void}) { const [name,setName]=useState("My Custom Widget");const [html,setHtml]=useState("<main><h2>Hello from Widget Studio</h2><button id='notify'>Notify me</button></main>");const [css,setCss]=useState("main { padding: 16px; }\nbutton { padding: 8px 12px; border-radius: 8px; }");const [js,setJs]=useState("document.querySelector('#notify').onclick = () => WidgetStudio.request('notifications', { title: 'Custom widget', body: 'Permission granted.' });");const [message,setMessage]=useState("");const create=()=>{onCreateWidget("custom",name.trim()||"Untitled Widget",{source:{html,css,js},permissions:{}});setMessage("Widget created in a sandbox and added to the workspace.")};return <Page title="Widget developer" subtitle="Build sandboxed HTML, CSS and JavaScript widgets. Protected APIs always require permission."><div className="content-panel max-w-3xl"><label className="developer-field"><span>Widget name</span><input value={name} onChange={e=>setName(e.target.value)}/></label><label className="developer-field"><span>HTML</span><textarea rows={6} value={html} onChange={e=>setHtml(e.target.value)} spellCheck={false}/></label><label className="developer-field"><span>CSS</span><textarea rows={6} value={css} onChange={e=>setCss(e.target.value)} spellCheck={false}/></label><label className="developer-field"><span>JavaScript</span><textarea rows={8} value={js} onChange={e=>setJs(e.target.value)} spellCheck={false}/></label><div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">Available protected APIs: network, clipboard, notifications, and openExternal. Each capability prompts the user on first use.</div><button className="primary-action" onClick={create}><Plus size={15}/> Create sandboxed widget</button>{message&&<p className="mt-3 text-sm">{message}</p>}</div></Page> }
 
 function downloadJson(name:string,value:unknown){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)}
 function safeName(value:string){return value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"widget"}
@@ -507,16 +510,15 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
   );
 }
 
-export function ManagerPage({ view, widgets, onOpenWidgets, onSetWidgets, onCreateWidget }: { view: ManagerView; widgets: DesktopWidget[]; onOpenWidgets: () => void; onSetWidgets: (widgets: DesktopWidget[]) => void; onCreateWidget: (type: WidgetKind, name: string, data: Record<string, unknown>) => void }) {
+export function ManagerPage({ view, widgets, onOpenWidgets, onSetWidgets, editingWidget, onPublishCustomWidget }: { view: ManagerView; widgets: DesktopWidget[]; onOpenWidgets: () => void; onSetWidgets: (widgets: DesktopWidget[]) => void; editingWidget: DesktopWidget | null; onPublishCustomWidget: (draft: import("../../types/customWidget").CustomWidgetDraft, existingWidget: DesktopWidget | null) => void }) {
   if (view === "dashboard") return <Dashboard widgets={widgets} onOpenWidgets={onOpenWidgets} onSetWidgets={onSetWidgets} />;
   if (view === "marketplace") return <ImportExport widgets={widgets} onSetWidgets={onSetWidgets} />;
   if (view === "layouts") return <Layouts widgets={widgets} onSetWidgets={onSetWidgets} />;
   if (view === "performance") return <Performance widgets={widgets} />;
-  if (view === "developer") return <DeveloperPage onCreateWidget={onCreateWidget} />;
+  if (view === "developer") return <WidgetBuilder editingWidget={editingWidget} onPublish={onPublishCustomWidget} onCancel={onOpenWidgets} />;
   return <GenericPage view={view} widgets={widgets} onSetWidgets={onSetWidgets} />;
 }
 
 function Page({title,subtitle,action,children}:{title:string;subtitle:string;action?:React.ReactNode;children:React.ReactNode}){return <section className="manager-page"><header className="mb-5 flex items-start"><div><h1 className="text-2xl font-semibold">{title}</h1><p className="mt-1 text-sm text-muted">{subtitle}</p></div><div className="ml-auto">{action}</div></header>{children}</section>}
 function Panel({title,action,children}:{title:string;action?:string;children:React.ReactNode}){return <section className="content-panel mt-4"><header className="mb-4 flex"><b>{title}</b>{action&&<button className="ml-auto text-xs text-indigo-600">{action}</button>}</header>{children}</section>}
 function Quick({label,icon,onClick}:{label:string;icon:React.ReactNode;onClick?:()=>void}){return <button onClick={onClick} className="quick-action">{icon}<span>{label}</span></button>}
-

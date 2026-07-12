@@ -36,7 +36,21 @@ SECRET_KEY=generate-a-secure-random-secret-key-for-jwt
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+
+# AI chatbot used by the Chatbot widget
+OPENAI_API_KEY=your-provider-api-key
+# Optional: use an OpenAI-compatible provider
+OPENAI_BASE_URL=
+AI_MODEL=gpt-4o-mini
+AI_MAX_TOKENS=250
+AI_TEMPERATURE=0.7
+AI_TIMEOUT_SECONDS=30
 ```
+
+The authenticated widget sends the conversation to `POST /api/chatbot/chat`.
+The backend keeps the provider key server-side and forwards only the latest 20
+messages. If the AI configuration is missing, the endpoint returns `503` and
+the widget uses its local offline response path.
 
 ### 5. Running the Server
 Launch the server using uvicorn:

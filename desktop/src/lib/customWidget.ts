@@ -1,0 +1,77 @@
+import type { CustomWidgetSource, VisualBlock, VisualContainerBlock, VisualStyle, VisualWidgetDocument } from "../types/customWidget";
+
+const colorPattern = /^#[0-9a-f]{3,8}$/i;
+
+export interface CustomWidgetValidation {
+  errors: string[];
+  warnings: string[];
+}
+
+export function validateCustomWidgetSource(source: CustomWidgetSource): CustomWidgetValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!source.html.trim()) errors.push("Add some HTML before publishing the widget.");
+  if (source.html.length > 100_000 || source.css.length > 100_000 || source.js.length > 100_000) errors.push("Each source section must be 100,000 characters or less.");
+  if (/<iframe[^>]+src\s*=\s*["']?javascript:/i.test(source.html)) warnings.push("JavaScript iframe URLs are disabled by the sandbox.");
+  if (source.js.trim()) {
+    try {
+      // Syntax-check user code without running it.
+      new Function("WidgetStudio", source.js);
+    } catch (error) {
+      errors.push(`JavaScript error: ${error instanceof Error ? error.message : "invalid syntax"}`);
+    }
+  }
+  return { errors, warnings };
+}
+
+export function buildCustomWidgetSrcDoc(source: CustomWidgetSource): string {
+  const css = source.css.replace(/<\/style/gi, "<\\/style");
+  const js = source.js.replace(/<\/script/gi, "<\\/script");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;min-height:100%;font-family:Segoe UI,sans-serif;color:inherit;background:transparent;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}${css}</style></head><body>${source.html}</body><script>
+window.addEventListener('error', function(event) { parent.postMessage({type:'widget-studio-runtime-error', message:String(event.message || 'Widget runtime error')}, '*'); });
+window.addEventListener('unhandledrejection', function(event) { parent.postMessage({type:'widget-studio-runtime-error', message:String(event.reason || 'Unhandled widget promise rejection')}, '*'); });
+const WidgetStudio={request:(permission,payload)=>new Promise((resolve,reject)=>{const id=crypto.randomUUID();const handler=(event)=>{if(event.data?.type==='widget-studio-result'&&event.data.id===id){removeEventListener('message',handler);event.data.ok?resolve(event.data.value):reject(new Error(event.data.error||'Permission denied'));}};addEventListener('message',handler);parent.postMessage({type:'widget-studio-request',id,permission,payload},'*');})};
+try { ${js} } catch (error) { parent.postMessage({type:'widget-studio-runtime-error', message:String(error)}, '*'); document.body.innerHTML='<pre style="color:#dc2626;white-space:pre-wrap;padding:12px">'+String(error)+'</pre>'; }
+</script></html>`;
+}
+
+export function renderVisualDocument(document: VisualWidgetDocument): CustomWidgetSource {
+  const html = renderContainer(document.root, true);
+  const js = `document.querySelectorAll('[data-ws-action]').forEach((element)=>element.addEventListener('click',(event)=>{event.preventDefault();const action=element.getAttribute('data-ws-action');const value=element.getAttribute('data-ws-value')||'';const label=element.getAttribute('data-ws-label')||'Widget';if(action==='openExternal')WidgetStudio.request('openExternal',{url:value});if(action==='notifications')WidgetStudio.request('notifications',{title:label,body:value});if(action==='clipboard')WidgetStudio.request('clipboard',{text:value});}));`;
+  return { html, css: ".ws-root{width:100%;min-height:100%;display:flex;flex-direction:column;overflow:auto}.ws-row{flex-direction:row;align-items:center}.ws-heading{margin:0}.ws-text{margin:0;white-space:pre-wrap}.ws-button{border:0;cursor:pointer;font:inherit}.ws-link{cursor:pointer;text-decoration:underline}.ws-image{display:block;max-width:100%;object-fit:cover}.ws-spacer{flex:0 0 auto}", js };
+}
+
+function renderContainer(block: VisualContainerBlock, root = false): string {
+  const style = styleString({ ...block.style, padding: block.padding }, { display: "flex", flexDirection: block.type === "row" ? "row" : "column", gap: block.gap, alignItems: block.type === "row" ? "center" : undefined });
+  return `<div class="${root ? "ws-root " : ""}ws-block ws-${block.type}" data-block-id="${escapeAttribute(block.id)}" style="${style}">${block.children.map((child) => renderBlock(child)).join("")}</div>`;
+}
+
+function renderBlock(block: VisualBlock): string {
+  if (block.type === "container" || block.type === "row") return renderContainer(block);
+  if (block.type === "heading") return `<h${block.level} class="ws-block ws-heading" data-block-id="${escapeAttribute(block.id)}" style="${styleString(block.style, { margin: 0 })}">${escapeHtml(block.text)}</h${block.level}>`;
+  if (block.type === "text") return `<p class="ws-block ws-text" data-block-id="${escapeAttribute(block.id)}" style="${styleString(block.style)}">${escapeHtml(block.text)}</p>`;
+  if (block.type === "button") return `<button class="ws-block ws-button" data-block-id="${escapeAttribute(block.id)}" data-ws-action="${escapeAttribute(block.action)}" data-ws-value="${escapeAttribute(block.value)}" data-ws-label="${escapeAttribute(block.label)}" style="${styleString(block.style)}">${escapeHtml(block.label)}</button>`;
+  if (block.type === "link") return `<a class="ws-block ws-link" href="#" data-block-id="${escapeAttribute(block.id)}" data-ws-action="openExternal" data-ws-value="${escapeAttribute(block.url)}" data-ws-label="${escapeAttribute(block.label)}" style="${styleString(block.style)}">${escapeHtml(block.label)}</a>`;
+  if (block.type === "image") return `<img class="ws-block ws-image" src="${escapeAttribute(safeHttpUrl(block.src))}" alt="${escapeAttribute(block.alt)}" data-block-id="${escapeAttribute(block.id)}" style="${styleString(block.style, { width: block.width, height: block.height })}">`;
+  if (block.type === "spacer") return `<div class="ws-block ws-spacer" data-block-id="${escapeAttribute(block.id)}" style="height:${clamp(block.size, 0, 400)}px"></div>`;
+  return "";
+}
+
+function styleString(style: VisualStyle, defaults: Record<string, string | number | undefined> = {}): string {
+  const values: Record<string, string | number | undefined> = { ...defaults, ...style };
+  const output: string[] = [];
+  const map: Record<string, string> = { backgroundColor: "background-color", fontSize: "font-size", fontWeight: "font-weight", borderRadius: "border-radius", textAlign: "text-align", padding: "padding", color: "color", width: "width", height: "height", display: "display", flexDirection: "flex-direction", gap: "gap", alignItems: "align-items", margin: "margin" };
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined || value === "") continue;
+    if ((key === "color" || key === "backgroundColor") && typeof value === "string" && !colorPattern.test(value)) continue;
+    const cssKey = map[key];
+    if (!cssKey) continue;
+    output.push(`${cssKey}:${typeof value === "number" && !["fontWeight"].includes(key) ? `${clamp(value, 0, 1000)}px` : value}`);
+  }
+  return output.join(";");
+}
+
+function safeHttpUrl(value: string): string { return /^https?:\/\//i.test(value.trim()) ? value.trim() : ""; }
+function clamp(value: number, min: number, max: number): number { return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min; }
+function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character)); }
+function escapeAttribute(value: string): string { return escapeHtml(String(value)); }

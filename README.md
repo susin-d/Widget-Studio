@@ -93,6 +93,10 @@ Widget Studio comes with **13 built-in widgets**:
 
 ## 🚀 Setup & Execution Guide
 
+### Creating a custom widget
+
+Open **Dev tools** in Widget Studio for the visual/code builder, live sandbox preview, permissions guide, and publishing flow. See the full [custom widget guide](docs/custom-widget-guide.md) for block behavior, the `WidgetStudio.request(...)` API, and troubleshooting.
+
 Ensure you have **Node.js 20+**, **Rust stable**, **Python 3.9+**, and **PostgreSQL** installed.
 
 ### 1. Launching the Backend Server

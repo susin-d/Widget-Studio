@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -38,11 +38,15 @@ class LayoutSyncResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str
-    text: str
+    text: str = Field(min_length=1, max_length=4000)
+
+    class Config:
+        str_strip_whitespace = True
 
 class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
+    messages: List[ChatMessage] = Field(min_length=1, max_length=50)
     persona: str = "assistant"
+    reasoning_effort: Literal["low", "medium", "high", "max"] = "high"
 
 class ChatResponse(BaseModel):
     reply: str

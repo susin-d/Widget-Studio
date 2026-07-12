@@ -1,4 +1,4 @@
-import { Copy, EyeOff, Lock, Pin, Trash2, Unlock } from "lucide-react";
+import { Code2, Copy, EyeOff, Lock, Pin, Trash2, Unlock } from "lucide-react";
 import { nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget, ThemeMode, WidgetBackground } from "../../types/widget";
@@ -8,9 +8,10 @@ import { openWidgetOverlay, closeWidgetOverlay, toggleWidgetLock, deleteWidget }
 interface WidgetInspectorProps {
   widget: DesktopWidget | null;
   onSelectWidget: (id: string | null) => void;
+  onOpenDeveloper?: (id: string) => void;
 }
 
-export function WidgetInspector({ widget, onSelectWidget }: WidgetInspectorProps) {
+export function WidgetInspector({ widget, onSelectWidget, onOpenDeveloper }: WidgetInspectorProps) {
   const duplicateWidget = useWidgetStore((state) => state.duplicateWidget);
   const removeWidget = useWidgetStore((state) => state.removeWidget);
   const updateRect = useWidgetStore((state) => state.updateRect);
@@ -108,15 +109,16 @@ export function WidgetInspector({ widget, onSelectWidget }: WidgetInspectorProps
         </Section>
 
         <Section title="Widget">
-          <WidgetSpecific widget={widget} />
+          <WidgetSpecific widget={widget} onOpenDeveloper={onOpenDeveloper} />
         </Section>
       </div>
     </aside>
   );
 }
 
-function WidgetSpecific({ widget }: { widget: DesktopWidget }) {
+function WidgetSpecific({ widget, onOpenDeveloper }: { widget: DesktopWidget; onOpenDeveloper?: (id: string) => void }) {
   const updateWidget=useWidgetStore.getState().updateWidget;
+  if (widget.type === "custom") return <div className="space-y-3"><p className="text-sm text-muted">This widget runs from your saved HTML, CSS, and JavaScript source inside the sandbox.</p>{onOpenDeveloper && <Button className="w-full" icon={<Code2 size={14}/>} onClick={() => onOpenDeveloper(widget.id)}>Edit in builder</Button>}<Button className="w-full" onClick={() => updateWidget(widget.id, { data: { ...widget.data, permissions: {} } })}>Reset permissions</Button></div>;
   if (widget.type === "weather") return <div className="space-y-3"><label className="block text-xs text-muted">Location<input className="mt-1 w-full rounded-md border border-black/10 bg-white/70 p-2 text-text" value={String(widget.data?.location??"New Delhi")} onChange={e=>updateWidget(widget.id,{data:{...widget.data,location:e.target.value}})}/></label><SelectRow label="Units" value={String(widget.data?.units??"celsius")} options={["celsius","fahrenheit"]} onChange={units=>updateWidget(widget.id,{data:{...widget.data,units}})}/><NumberRow label="Refresh minutes" min={5} value={widget.settings.refreshInterval} onChange={refreshInterval=>useWidgetStore.getState().updateSettings(widget.id,{refreshInterval})}/></div>;
   if (widget.type === "todo") return <p className="text-sm text-muted">Todo items are edited directly inside the widget.</p>;
   if (widget.type === "notes") return <p className="text-sm text-muted">Notes are edited directly inside the widget.</p>;

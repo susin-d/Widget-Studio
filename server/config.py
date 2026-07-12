@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = ""
+    AI_MODEL: str = "gpt-4o-mini"
+    AI_MAX_TOKENS: int = 250
+    AI_TEMPERATURE: float = 0.7
+    AI_TIMEOUT_SECONDS: float = 30.0
 
     class Config:
         env_file = ".env"
