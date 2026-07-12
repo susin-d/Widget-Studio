@@ -1,0 +1,99 @@
+import { create } from "zustand";
+
+export interface UserSession {
+  token: string | null;
+  email: string | null;
+}
+
+interface AuthStore {
+  token: string | null;
+  email: string | null;
+  loading: boolean;
+  error: string | null;
+  syncStatus: "synced" | "syncing" | "error" | "offline";
+  lastSyncedAt: string | null;
+  
+  initialize: () => void;
+  setSession: (token: string, email: string) => void;
+  login: (email: string, pass: string) => Promise<void>;
+  signup: (email: string, pass: string) => Promise<void>;
+  logout: () => void;
+  setSyncStatus: (status: "synced" | "syncing" | "error" | "offline") => void;
+  setLastSyncedAt: (time: string | null) => void;
+}
+
+export const BACKEND_URL = "http://localhost:8000";
+
+export const useAuthStore = create<AuthStore>((set, get) => ({
+  token: null,
+  email: null,
+  loading: false,
+  error: null,
+  syncStatus: "offline",
+  lastSyncedAt: null,
+
+  initialize: () => {
+    const savedToken = localStorage.getItem("widget-studio-token");
+    const savedEmail = localStorage.getItem("widget-studio-email");
+    if (savedToken && savedEmail) {
+      set({ token: savedToken, email: savedEmail, syncStatus: "synced" });
+    }
+  },
+
+  setSession: (token, email) => {
+    localStorage.setItem("widget-studio-token", token);
+    localStorage.setItem("widget-studio-email", email);
+    set({ token, email, error: null, syncStatus: "synced" });
+  },
+
+  login: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Authentication failed");
+      }
+      get().setSession(data.access_token, data.email);
+    } catch (err: any) {
+      set({ error: err.message || "Something went wrong" });
+      throw err;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  signup: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Signup failed");
+      }
+      get().setSession(data.access_token, data.email);
+    } catch (err: any) {
+      set({ error: err.message || "Something went wrong" });
+      throw err;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem("widget-studio-token");
+    localStorage.removeItem("widget-studio-email");
+    set({ token: null, email: null, error: null, syncStatus: "offline", lastSyncedAt: null });
+  },
+
+  setSyncStatus: (syncStatus) => set({ syncStatus }),
+  setLastSyncedAt: (lastSyncedAt) => set({ lastSyncedAt }),
+}));

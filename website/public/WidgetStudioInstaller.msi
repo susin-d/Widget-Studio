@@ -1,0 +1,11 @@
+Widget Studio Desktop Installer Mock Package
+==========================================
+
+This file simulates the Widget Studio .msi installer package in the web preview mode.
+
+Steps to Run:
+1. Copy this file into your project workspace.
+2. In production, this file is compiled using tauri-bundle into a fully operational Windows Installer (.msi).
+3. The Tauri runtime launches the application natively with low footprint overlays.
+
+For support, visit: http://localhost:8000/

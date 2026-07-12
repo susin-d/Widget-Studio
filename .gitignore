@@ -1,0 +1,46 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Frontend build output and caches
+dist/
+build/
+**/dist/
+**/build/
+.vite/
+**/.vite/
+.cache/
+*.tsbuildinfo
+
+# Tauri/Rust build output
+target/
+**/target/
+
+# Local databases and runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Coverage and test output
+coverage/
+htmlcov/
+.pytest_cache/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
