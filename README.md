@@ -151,7 +151,7 @@ Create two Vercel projects from this same repository:
 - **Framework Preset:** Other
 - **Build Command:** leave empty
 - **Output Directory:** leave empty
-- `server/api/index.py` exposes the FastAPI app as a Vercel Python Function.
+- `server/main.py` exposes the FastAPI app as a Vercel Python Function.
 - `/api/*` keeps the same API paths used by local development and the desktop client.
 
 Add these environment variables to the API project:
