@@ -3,6 +3,7 @@ import { nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget, ThemeMode, WidgetBackground } from "../../types/widget";
 import { Button } from "../ui/Button";
+import { browserWidgetData, normalizeBrowserUrl } from "../../types/browserWidget";
 import { openWidgetOverlay, closeWidgetOverlay, toggleWidgetLock, deleteWidget } from "../../lib/widgetActions";
 
 interface WidgetInspectorProps {
@@ -123,6 +124,28 @@ function WidgetSpecific({ widget, onOpenDeveloper }: { widget: DesktopWidget; on
   if (widget.type === "todo") return <p className="text-sm text-muted">Todo items are edited directly inside the widget.</p>;
   if (widget.type === "notes") return <p className="text-sm text-muted">Notes are edited directly inside the widget.</p>;
   if (widget.type === "links") return <p className="text-sm text-muted">Quick links are edited directly inside the widget.</p>;
+  if (widget.type === "browser") {
+    const data = browserWidgetData(widget.data);
+    const rawUrl = typeof widget.data?.url === "string" ? widget.data.url : data.url;
+    return <div className="space-y-3">
+      <label className="block text-xs text-muted">Website URL
+        <input
+          className="mt-1 w-full rounded-md border border-black/10 bg-white/70 p-2 text-text dark:border-white/10 dark:bg-black/20"
+          value={rawUrl}
+          onChange={(event) => updateWidget(widget.id, { data: { ...widget.data, version: 1, url: event.target.value } })}
+          onBlur={(event) => {
+            const normalized = normalizeBrowserUrl(event.target.value);
+            updateWidget(widget.id, { data: { ...widget.data, version: 1, url: normalized ?? data.url } });
+          }}
+          placeholder="https://example.com"
+          inputMode="url"
+          autoComplete="url"
+          spellCheck={false}
+        />
+      </label>
+      <p className="text-xs leading-5 text-muted">HTTP(S) sites load directly in the desktop overlay. Sites that block iframe embedding require pinning the widget.</p>
+    </div>;
+  }
   return <p className="text-sm text-muted">No extra controls for this widget.</p>;
 }
 

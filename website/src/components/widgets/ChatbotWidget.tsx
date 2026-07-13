@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { DesktopWidget } from "../../types/widget";
 import { useWidgetStore } from "../../store/widgetStore";
 import { useAuthStore, BACKEND_URL } from "../../store/authStore";
+import { executeWidgetCommand } from "../../lib/widgetAgent";
 import { Send, Trash2, Bot, Sparkles, Smile, Code } from "lucide-react";
 
 interface Message {
@@ -59,6 +60,8 @@ const BOT_RESPONSES: Record<string, string[]> = {
 
 export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
   const updateWidget = useWidgetStore((state) => state.updateWidget);
+  const widgets = useWidgetStore((state) => state.widgets);
+  const setWidgets = useWidgetStore((state) => state.setWidgets);
   const messages = (widget.data?.messages as Message[]) ?? [];
   const currentPersona = String(widget.data?.persona ?? "assistant");
   const reasoningEffort = (REASONING_OPTIONS.some((option) => option.value === widget.data?.reasoningEffort)
@@ -93,6 +96,14 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
 
     setInputText("");
     setIsTyping(true);
+
+    const commandResult = executeWidgetCommand(userMessage.text, widgets);
+    if (commandResult.widgets !== widgets) {
+      setWidgets(commandResult.widgets);
+      updateWidget(widget.id, { data: { ...widget.data, messages: [...nextMessages, { id: crypto.randomUUID(), role: "assistant", text: commandResult.message }] } });
+      setIsTyping(false);
+      return;
+    }
 
     const token = useAuthStore.getState().token;
     if (token) {

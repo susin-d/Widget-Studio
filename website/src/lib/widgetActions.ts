@@ -1,7 +1,7 @@
 import { isTauri, nativeApi } from "./tauri";
 import type { DesktopWidget } from "../types/widget";
 
-export type ErrorReporter = (error: any, context: string) => void;
+export type ErrorReporter = (error: unknown, context: string) => void;
 
 /**
  * Pins a widget to the desktop and opens its corresponding Tauri window.

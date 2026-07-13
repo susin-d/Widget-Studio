@@ -12,7 +12,8 @@ export type WidgetKind =
   | "worldclock"
   | "stickynotes"
   | "calculator"
-  | "chatbot";
+  | "chatbot"
+  | "browser";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ColorTheme = "berry-pop" | "citrus-splash" | "ocean-candy" | "lavender-dream" | "mint-sorbet" | "midnight-neon";

@@ -17,7 +17,8 @@ const widgetNames: Record<WidgetKind, string> = {
   worldclock: "World Clock",
   stickynotes: "Sticky Notepad",
   calculator: "Calculator",
-  chatbot: "AI Chatbot"
+  chatbot: "AI Chatbot",
+  browser: "Browser"
 };
 
 interface WidgetStore {
@@ -285,5 +286,6 @@ function defaultData(type: WidgetKind): Record<string, unknown> {
       persona: "assistant"
     };
   }
+  if (type === "browser") return { version: 1, url: "https://example.com" };
   return {};
 }

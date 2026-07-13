@@ -1,4 +1,4 @@
-import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot, Globe2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { isTauri, nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
@@ -18,6 +18,7 @@ export const widgetGallery: Array<{ type: WidgetKind; label: string; icon: React
   { type: "stickynotes", label: "Sticky Notepad", icon: <StickyNote size={16} /> },
   { type: "calculator", label: "Calculator", icon: <Calculator size={16} /> },
   { type: "chatbot", label: "AI Chatbot", icon: <Bot size={16} /> },
+  { type: "browser", label: "Browser", icon: <Globe2 size={16} /> },
 ];
 
 interface WidgetGalleryProps {

@@ -21,6 +21,7 @@ import { WorldClockWidget } from "../widgets/WorldClockWidget";
 import { StickyNotepadWidget } from "../widgets/StickyNotepadWidget";
 import { CalculatorWidget } from "../widgets/CalculatorWidget";
 import { ChatbotWidget } from "../widgets/ChatbotWidget";
+import { BrowserWidget } from "../widgets/BrowserWidget";
 import { hexToRgb } from "../../lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay, toggleWidgetLock, deleteWidget } from "../../lib/widgetActions";
 
@@ -214,7 +215,7 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
         </header>
       )}
       <div className={`${isDesktopWidget ? "h-auto w-max overflow-visible" : "h-[calc(100%-36px)] overflow-hidden"}`} style={{ fontSize: widget.settings.fontSize }}>
-        <WidgetBody widget={widget} />
+        <WidgetBody widget={widget} overlay={overlay} />
       </div>
       {!isDesktopWidget && isTauri && <div className="absolute right-2 top-11 hidden rounded-lg bg-panel/95 p-1 shadow-win group-hover:flex">
         <IconAction label="Duplicate" icon={<Copy size={14} />} onClick={() => duplicateWidget(widget.id)} />
@@ -395,7 +396,7 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 }
 
 
-function WidgetBody({ widget }: { widget: DesktopWidget }) {
+function WidgetBody({ widget, overlay }: { widget: DesktopWidget; overlay?: boolean }) {
   if (widget.type === "custom") return <CustomWidget widget={widget} />;
   if (widget.type === "clock") return <ClockWidget />;
   if (widget.type === "weather") return <WeatherWidget widget={widget} />;
@@ -409,6 +410,7 @@ function WidgetBody({ widget }: { widget: DesktopWidget }) {
   if (widget.type === "stickynotes") return <StickyNotepadWidget widget={widget} />;
   if (widget.type === "calculator") return <CalculatorWidget />;
   if (widget.type === "chatbot") return <ChatbotWidget widget={widget} />;
+  if (widget.type === "browser") return <BrowserWidget widget={widget} overlay={overlay} />;
   return <CalendarWidget widget={widget} />;
 }
 

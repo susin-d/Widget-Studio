@@ -48,8 +48,8 @@ pub fn run() {
             commands::open_widget_window,
             commands::close_widget_window,
             commands::set_window_size,
-            commands::set_window_position
-            ,commands::copy_to_clipboard
+            commands::set_window_position,
+            commands::copy_to_clipboard
         ])
         .setup(|app| {
             #[cfg(any(target_os = "windows", target_os = "linux"))]

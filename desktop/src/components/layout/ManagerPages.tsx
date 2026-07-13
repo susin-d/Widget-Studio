@@ -10,6 +10,7 @@ import { useSystemInfo } from "../../hooks/useSystemInfo";
 import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidgetPermission } from "../../types/customWidget";
 import { isTauri } from "../../lib/tauri";
 import { createWidget, useWidgetStore } from "../../store/widgetStore";
+import { executeWidgetCommand } from "../../lib/widgetAgent";
 
 
 
@@ -280,7 +281,7 @@ function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidge
   const validateWidget = (w: any): w is DesktopWidget => {
     if (!w || typeof w !== "object") return false;
     if (typeof w.name !== "string" || !w.name) return false;
-    const kinds: WidgetKind[] = ["clock", "weather", "todo", "notes", "system", "links", "calendar", "custom", "mindmap", "pomodoro", "worldclock", "stickynotes", "calculator", "chatbot"];
+    const kinds: WidgetKind[] = ["clock", "weather", "todo", "notes", "system", "links", "calendar", "custom", "mindmap", "pomodoro", "worldclock", "stickynotes", "calculator", "chatbot", "browser"];
     if (!kinds.includes(w.type)) return false;
     if (!w.rect || typeof w.rect !== "object") return false;
     const { x, y, width, height } = w.rect;
@@ -406,75 +407,32 @@ function Automations({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSe
   return <Page title="Automations" subtitle="Trigger automated changes based on desktop and battery events."><div className="content-panel max-w-2xl space-y-4 text-sm"><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Battery Saver Auto-mode</b><span className="text-xs text-muted">Reduces widget transparency below 20% battery. Current battery: {systemInfo?.battery_level != null ? `${systemInfo.battery_level}%` : "unavailable"}.</span></div><input type="checkbox" checked={settings.batterySaverAutomation} onChange={() => updateSetting("batterySaverAutomation", !settings.batterySaverAutomation)} className="h-5 w-5 accent-accent" /></label><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Workspace Focus Hours</b><span className="text-xs text-muted">Hides non-essential widgets while enabled; clocks and calendars remain visible.</span></div><input type="checkbox" checked={settings.focusHoursAutomation} onChange={() => updateSetting("focusHoursAutomation", !settings.focusHoursAutomation)} className="h-5 w-5 accent-accent" /></label></div></Page>;
 }
 
-type AgentId = "todo" | "workspace";
-
 function AIAgents({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
-  const [enabled, setEnabled] = useState<Record<AgentId, boolean>>({ todo: true, workspace: true });
+  const [enabled, setEnabled] = useState(true);
   const [command, setCommand] = useState("");
-  const [message, setMessage] = useState("Agents are ready to manage this desktop.");
+  const [message, setMessage] = useState("Widget Agent is ready to manage your workspace.");
   const [activity, setActivity] = useState<string[]>([]);
 
-  const run = (agent: AgentId, action: () => string) => {
-    if (!enabled[agent]) {
-      setMessage(`${agent === "todo" ? "Todo" : "Workspace"} Agent is paused.`);
-      return;
-    }
-    const result = action();
-    setMessage(result);
-    setActivity((items) => [`${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${result}`, ...items].slice(0, 6));
-  };
-
-  const addTodo = (text: string) => {
-    const todo = widgets.find((widget) => widget.type === "todo");
-    if (!todo) {
-      const created = createWidget("todo", widgets.length);
-      created.data = { ...created.data, items: [{ id: crypto.randomUUID(), text, done: false }] };
-      onSetWidgets([...widgets, created]);
-      return "Created a Todo widget and added the task.";
-    }
-    const items = Array.isArray(todo.data?.items) ? todo.data.items : [];
-    onSetWidgets(widgets.map((widget) => widget.id === todo.id ? { ...widget, data: { ...widget.data, items: [...items, { id: crypto.randomUUID(), text, done: false }] } } : widget));
-    return `Added “${text}” to ${todo.name}.`;
-  };
-
   const runCommand = () => {
-    const value = command.trim();
-    if (!value) return;
-    const lower = value.toLowerCase();
-    if (lower.startsWith("add todo:") || lower.startsWith("add task:")) {
-      run("todo", () => addTodo(value.slice(value.indexOf(":") + 1).trim() || "New task"));
-    } else if (lower.includes("complete") && lower.includes("todo")) {
-      run("todo", () => {
-        const todo = widgets.find((widget) => widget.type === "todo");
-        if (!todo) return "No Todo widget is installed.";
-        const items = Array.isArray(todo.data?.items) ? todo.data.items : [];
-        onSetWidgets(widgets.map((widget) => widget.id === todo.id ? { ...widget, data: { ...widget.data, items: items.map((item: any) => ({ ...item, done: true })) } } : widget));
-        return "Completed every task in the Todo widget.";
-      });
-    } else if (lower.includes("hide") && lower.includes("widget")) {
-      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: true }))); return `Hidden ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
-    } else if ((lower.includes("show") || lower.includes("unhide")) && lower.includes("widget")) {
-      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return `Showing ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
-    } else if (lower.includes("pin") && lower.includes("widget")) {
-      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, pinned: true, locked: true }))); return `Pinned ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
-    } else {
-      setMessage("Try: “add todo: review the widgets” or “hide all widgets”.");
-    }
+    if (!enabled) { setMessage("Widget Agent is paused."); return; }
+    const result = executeWidgetCommand(command, widgets);
+    if (result.widgets !== widgets) onSetWidgets(result.widgets);
+    setMessage(result.message);
+    setActivity((items) => [`${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${result.message}`, ...items].slice(0, 6));
     setCommand("");
   };
 
   const todoCount = widgets.filter((widget) => widget.type === "todo").length;
   const completed = widgets.filter((widget) => widget.type === "todo").reduce((total, widget) => total + (Array.isArray(widget.data?.items) ? widget.data.items.filter((item: any) => item.done).length : 0), 0);
-  return <Page title="AI Agents" subtitle="Give focused agents permission to manage your Todo list and the whole widget workspace.">
+  return <Page title="AI Agent" subtitle="Control widget content, layout, visibility, and lifecycle from one command center.">
     <div className="grid grid-cols-2 gap-4 max-w-4xl">
       <section className="content-panel col-span-2 border-accent/20 bg-accent/[0.04]">
-        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><Sparkles size={19}/></div><div><b className="block">Agent command center</b><p className="mt-1 text-xs text-muted">Commands run locally against your current widget state. Nothing is changed while an agent is paused.</p></div></div>
-        <div className="mt-4 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runCommand(); }} placeholder="Try: add todo: prepare tomorrow's plan" className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"/><button onClick={runCommand} className="primary-action"><Play size={14}/> Run</button></div>
+        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><Sparkles size={19}/></div><div><b className="block">Full widget control</b><p className="mt-1 text-xs text-muted">Commands run locally against the current widget state and persist through the normal local/cloud sync flow.</p></div></div>
+        <div className="mt-4 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runCommand(); }} placeholder="Try: add link: OpenAI | https://openai.com" className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"/><button onClick={runCommand} disabled={!command.trim()} className="primary-action"><Play size={14}/> Run</button></div>
         <p className="mt-3 text-xs font-medium text-accent">{message}</p>
       </section>
-      <AgentCard title="Todo Agent" description="Adds tasks, finds your Todo widget, and completes the checklist." icon={<CheckSquare size={18}/>} enabled={enabled.todo} onToggle={() => setEnabled((state) => ({ ...state, todo: !state.todo }))} onRun={() => run("todo", () => addTodo("Review today's priorities"))} stats={`${todoCount} Todo widget${todoCount === 1 ? "" : "s"} · ${completed} completed`} />
-      <AgentCard title="Workspace Agent" description="Manages every widget together: show, hide, pin, and organize the desktop." icon={<Bot size={18}/>} enabled={enabled.workspace} onToggle={() => setEnabled((state) => ({ ...state, workspace: !state.workspace }))} onRun={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return `Showing all ${widgets.length} widgets.`; })} stats={`${widgets.length} installed widget${widgets.length === 1 ? "" : "s"}`} />
-      <section className="content-panel col-span-2"><header className="mb-3 flex items-center gap-2"><WandSparkles size={16} className="text-accent"/><b>Quick controls</b></header><div className="grid grid-cols-4 gap-2"><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return "Showing all widgets."; })}><Eye size={15}/><span>Show all</span></button><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: true }))); return "Hidden all widgets."; })}><EyeOff size={15}/><span>Hide all</span></button><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, pinned: true, locked: true }))); return "Pinned all widgets."; })}><Pin size={15}/><span>Pin all</span></button><button className="quick-action" onClick={() => run("todo", () => addTodo("Plan the next focus session"))}><CheckSquare size={15}/><span>Add task</span></button></div></section>
+      <AgentCard title="Widget Agent" description="Controls every installed widget and its built-in data through explicit local commands." icon={<Bot size={18}/>} enabled={enabled} onToggle={() => setEnabled((state) => !state)} onRun={() => { const result = executeWidgetCommand("list widgets", widgets); setMessage(result.message); setActivity((items) => [`${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${result.message}`, ...items].slice(0, 6)); }} stats={`${widgets.length} installed widget${widgets.length === 1 ? "" : "s"} · ${todoCount} Todo · ${completed} tasks completed`} />
+      <section className="content-panel col-span-2"><header className="mb-3 flex items-center gap-2"><WandSparkles size={16} className="text-accent"/><b>Supported controls</b></header><p className="text-xs leading-6 text-muted">List or create widgets; show, hide, pin, lock, unlock, unpin, or remove them; add and complete Todo tasks; replace Notes text; change Weather location; add Quick Links and Sticky Notes; switch Pomodoro mode. Use <code>Label | URL</code> for links and <code>Title | Content</code> for sticky notes.</p></section>
       <section className="content-panel col-span-2"><b>Recent agent activity</b>{activity.length ? <div className="mt-3 space-y-2 text-xs text-muted">{activity.map((item, index) => <div key={`${item}-${index}`} className="rounded-lg bg-black/[0.04] px-3 py-2 dark:bg-white/[0.05]">{item}</div>)}</div> : <p className="mt-3 text-xs text-muted">Run a command or quick control to see activity here.</p>}</section>
     </div>
   </Page>;

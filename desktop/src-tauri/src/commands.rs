@@ -13,6 +13,12 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 const SYSTEM_INFO_CACHE_TTL: Duration = Duration::from_secs(5);
+const WIDGET_WINDOW_PREFIX: &str = "widget-";
+const MAIN_WINDOW_MIN_WIDTH: f64 = 320.0;
+const MAIN_WINDOW_MIN_HEIGHT: f64 = 240.0;
+const WIDGET_WINDOW_MIN_SIZE: f64 = 1.0;
+const TEMPORARY_TOPMOST_DURATION: Duration = Duration::from_millis(700);
+const VISIBILITY_MONITOR_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -124,7 +130,7 @@ pub fn show_window(app: AppHandle) -> Result<(), String> {
 
     let restore_window = window.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(700));
+        std::thread::sleep(TEMPORARY_TOPMOST_DURATION);
         let _ = restore_window.set_always_on_top(false);
     });
 
@@ -194,7 +200,7 @@ pub async fn open_widget_window(
     width: f64,
     height: f64,
 ) -> Result<(), String> {
-    let label = format!("widget-{}", id);
+    let label = widget_window_label(&id);
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.set_minimizable(false);
         window
@@ -202,8 +208,8 @@ pub async fn open_widget_window(
             .map_err(|error| error.to_string())?;
         window
             .set_size(PhysicalSize::new(
-                width.max(1.0) as u32,
-                height.max(1.0) as u32,
+                width.max(WIDGET_WINDOW_MIN_SIZE) as u32,
+                height.max(WIDGET_WINDOW_MIN_SIZE) as u32,
             ))
             .map_err(|error| error.to_string())?;
         window.show().map_err(|error| error.to_string())?;
@@ -225,7 +231,10 @@ pub async fn open_widget_window(
     .skip_taskbar(true)
     .shadow(false)
     .position(x, y)
-    .inner_size(width.max(1.0), height.max(1.0))
+    .inner_size(
+        width.max(WIDGET_WINDOW_MIN_SIZE),
+        height.max(WIDGET_WINDOW_MIN_SIZE),
+    )
     .build()
     .map(|window| {
         let _ = window.set_minimizable(false);
@@ -235,7 +244,7 @@ pub async fn open_widget_window(
 
 #[tauri::command]
 pub fn close_widget_window(app: AppHandle, id: String) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(&format!("widget-{}", id)) {
+    if let Some(window) = app.get_webview_window(&widget_window_label(&id)) {
         window.close().map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -245,8 +254,8 @@ pub fn close_widget_window(app: AppHandle, id: String) -> Result<(), String> {
 pub fn set_window_size(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
     main_window(&app)?
         .set_size(PhysicalSize::new(
-            width.max(320.0) as u32,
-            height.max(240.0) as u32,
+            width.max(MAIN_WINDOW_MIN_WIDTH) as u32,
+            height.max(MAIN_WINDOW_MIN_HEIGHT) as u32,
         ))
         .map_err(|error| error.to_string())
 }
@@ -263,27 +272,51 @@ pub fn copy_to_clipboard(text: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::ptr::copy_nonoverlapping;
-        use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
-        use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+        use windows_sys::Win32::Foundation::{GlobalFree, HGLOBAL};
+        use windows_sys::Win32::System::DataExchange::{
+            CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+        };
+        use windows_sys::Win32::System::Memory::{
+            GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+        };
         const CF_UNICODETEXT: u32 = 13;
         let utf16: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
-            if OpenClipboard(std::ptr::null_mut()) == 0 { return Err("Windows clipboard is unavailable".into()); }
-            EmptyClipboard();
+            if OpenClipboard(std::ptr::null_mut()) == 0 {
+                return Err("Windows clipboard is unavailable".into());
+            }
+            if EmptyClipboard() == 0 {
+                CloseClipboard();
+                return Err("Could not clear Windows clipboard".into());
+            }
             let bytes = utf16.len() * std::mem::size_of::<u16>();
             let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
-            if handle.is_null() { CloseClipboard(); return Err("Could not allocate clipboard memory".into()); }
+            if handle.is_null() {
+                CloseClipboard();
+                return Err("Could not allocate clipboard memory".into());
+            }
             let target = GlobalLock(handle) as *mut u16;
-            if target.is_null() { CloseClipboard(); return Err("Could not lock clipboard memory".into()); }
+            if target.is_null() {
+                GlobalFree(handle);
+                CloseClipboard();
+                return Err("Could not lock clipboard memory".into());
+            }
             copy_nonoverlapping(utf16.as_ptr(), target, utf16.len());
             GlobalUnlock(handle);
-            if SetClipboardData(CF_UNICODETEXT, handle).is_null() { CloseClipboard(); return Err("Could not set Windows clipboard data".into()); }
+            if SetClipboardData(CF_UNICODETEXT, handle).is_null() {
+                GlobalFree(handle as HGLOBAL);
+                CloseClipboard();
+                return Err("Could not set Windows clipboard data".into());
+            }
             CloseClipboard();
             Ok(())
         }
     }
     #[cfg(not(target_os = "windows"))]
-    { let _ = text; Err("Native clipboard is only implemented for Windows".into()) }
+    {
+        let _ = text;
+        Err("Native clipboard is only implemented for Windows".into())
+    }
 }
 
 fn main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
@@ -300,10 +333,10 @@ fn layout_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 pub fn start_widget_visibility_monitor(app: AppHandle) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(1));
+        std::thread::sleep(VISIBILITY_MONITOR_INTERVAL);
 
         for (label, window) in app.webview_windows() {
-            if !label.starts_with("widget-") {
+            if !label.starts_with(WIDGET_WINDOW_PREFIX) {
                 continue;
             }
 
@@ -315,6 +348,10 @@ pub fn start_widget_visibility_monitor(app: AppHandle) {
             }
         }
     });
+}
+
+fn widget_window_label(id: &str) -> String {
+    format!("{WIDGET_WINDOW_PREFIX}{id}")
 }
 
 fn normalize_battery_level(battery_flag: u8, battery_percent: u8) -> Option<u8> {
