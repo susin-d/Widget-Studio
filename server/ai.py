@@ -1,7 +1,11 @@
 from openai import AsyncOpenAI
 
-from server.config import settings
-from server.schemas import ChatRequest
+try:
+    from server.config import settings
+    from server.schemas import ChatRequest
+except ModuleNotFoundError:
+    from config import settings
+    from schemas import ChatRequest
 
 SYSTEM_PROMPTS = {
     "assistant": "You are a helpful companion for Widget Studio. Help the user manage clocks, weather, notes, and desktop widgets.",

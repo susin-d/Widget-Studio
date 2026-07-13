@@ -2,7 +2,10 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
-from server.database import Base
+try:
+    from server.database import Base
+except ModuleNotFoundError:
+    from database import Base
 
 class User(Base):
     __tablename__ = "users"

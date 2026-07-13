@@ -114,8 +114,7 @@ pip install -r requirements.txt
 copy .env.example .env  # Or create one manually with DATABASE_URL, SECRET_KEY, and Google OAuth credentials
 
 # Start FastAPI
-cd ..
-python -m uvicorn server.main:app --reload --port 8000
+python -m uvicorn main:app --reload --port 8000
 ```
 *API docs will be available at [http://localhost:8000/docs](http://localhost:8000/docs).*
 
@@ -148,11 +147,11 @@ Create two Vercel projects from this same repository:
 
 ### 1. API project
 
-- **Root Directory:** repository root (`.`)
+- **Root Directory:** `server`
 - **Framework Preset:** Other
 - **Build Command:** leave empty
 - **Output Directory:** leave empty
-- `api/index.py` exposes the FastAPI app as a Vercel Python Function.
+- `server/api/index.py` exposes the FastAPI app as a Vercel Python Function.
 - `/api/*` keeps the same API paths used by local development and the desktop client.
 
 Add these environment variables to the API project:

@@ -1,7 +1,10 @@
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from server.config import settings
+try:
+    from server.config import settings
+except ModuleNotFoundError:
+    from config import settings
 
 # If DATABASE_URL starts with postgresql+asyncpg or sqlite+aiosqlite, convert it to synchronous
 # SQLAlchemy drivers because the current dependencies use sync sessions inside FastAPI

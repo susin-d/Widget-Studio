@@ -6,9 +6,14 @@ from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
-from server.config import settings
-from server.database import get_db
-from server.models import User
+try:
+    from server.config import settings
+    from server.database import get_db
+    from server.models import User
+except ModuleNotFoundError:
+    from config import settings
+    from database import get_db
+    from models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")

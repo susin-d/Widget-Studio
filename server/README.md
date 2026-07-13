@@ -57,21 +57,20 @@ messages. If the AI configuration is missing, the endpoint returns `503` and
 the widget uses its local offline response path.
 
 ### 5. Running the Server
-From the repository root, launch the server using uvicorn:
+From the `server` directory, launch the server using uvicorn:
 
 ```powershell
-cd ..
-python -m uvicorn server.main:app --reload --port 8000
+python -m uvicorn main:app --reload --port 8000
 ```
 
 The API docs will be interactive and accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-To bootstrap a fresh configured database explicitly, run this once from the repository root:
+To bootstrap a fresh configured database explicitly, run this once from the `server` directory:
 
 ```powershell
-python -m server.init_db
+python -m init_db
 ```
 
 ## Vercel
 
-The API is deployed as a separate Vercel project from the repository root. The root `vercel.json` only configures the Python function at `api/index.py`; leave the API project's build and output settings empty. Configure `DATABASE_URL`, `SECRET_KEY`, `GOOGLE_REDIRECT_URI`, and `WEB_AUTH_REDIRECT_URI` in the API project settings, then run `python -m server.init_db` once against the external database. Keep `AUTO_CREATE_SCHEMA=false` in production; Vercel function instances do not provide persistent local storage and can start concurrently.
+The API is deployed as a separate Vercel project with `server/` as its Root Directory. The `server/vercel.json` file configures the Python function at `api/index.py`; leave the API project's build and output settings empty. Configure `DATABASE_URL`, `SECRET_KEY`, `GOOGLE_REDIRECT_URI`, and `WEB_AUTH_REDIRECT_URI` in the API project settings, then run `python -m init_db` once from the `server` directory against the external database. Keep `AUTO_CREATE_SCHEMA=false` in production; Vercel function instances do not provide persistent local storage and can start concurrently.

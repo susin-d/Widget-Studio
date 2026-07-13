@@ -10,12 +10,20 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 
-from server.config import settings
-from server.database import engine, Base, get_db
-from server.models import User, Layout
-from server.schemas import UserCreate, UserLogin, UserResponse, TokenResponse, LayoutSyncRequest, LayoutSyncResponse, ChatRequest, ChatResponse
-from server.auth import hash_password, verify_password, create_access_token, get_current_user
-from server.ai import complete_chat
+try:
+    from server.config import settings
+    from server.database import engine, Base, get_db
+    from server.models import User, Layout
+    from server.schemas import UserCreate, UserLogin, UserResponse, TokenResponse, LayoutSyncRequest, LayoutSyncResponse, ChatRequest, ChatResponse
+    from server.auth import hash_password, verify_password, create_access_token, get_current_user
+    from server.ai import complete_chat
+except ModuleNotFoundError:
+    from config import settings
+    from database import engine, Base, get_db
+    from models import User, Layout
+    from schemas import UserCreate, UserLogin, UserResponse, TokenResponse, LayoutSyncRequest, LayoutSyncResponse, ChatRequest, ChatResponse
+    from auth import hash_password, verify_password, create_access_token, get_current_user
+    from ai import complete_chat
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -5,8 +5,12 @@ Vercel deployment. It is intentionally separate from FastAPI startup so
 serverless cold starts never compete to create tables.
 """
 
-from server.database import Base, engine
-from server import models  # noqa: F401  Ensures all model tables are registered.
+try:
+    from server.database import Base, engine
+    from server import models  # noqa: F401  Ensures all model tables are registered.
+except ModuleNotFoundError:
+    from database import Base, engine
+    import models  # noqa: F401  Ensures all model tables are registered.
 
 
 def main() -> None:
