@@ -286,7 +286,17 @@ function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopW
 function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}) {
   const [message,setMessage]=useState("");
   const [isError,setIsError]=useState(false);
-  const exportAll=()=>downloadJson("widget-studio-widgets.json",{version:2,widgets});
+  const exportJson = async (name: string, value: unknown) => {
+    try {
+      downloadJson(name, value);
+      setIsError(false);
+      setMessage(`Exported ${name}.`);
+    } catch (error) {
+      setIsError(true);
+      setMessage(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const exportAll=()=>void exportJson("widget-studio-widgets.json",{version:2,widgets});
   
   const validateWidget = (w: any): w is DesktopWidget => {
     if (!w || typeof w !== "object") return false;
@@ -317,10 +327,10 @@ function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidge
     setMessage(error instanceof Error?error.message:"Import failed");
   }};
 
-  return <Page title="Import & export" subtitle="Share widget configurations as portable JSON files."><div className="grid grid-cols-2 gap-4"><div className="feature-card flex-col items-start"><Download size={25}/><b>Import widgets</b><p>Select a Widget Studio JSON export. Imported widgets receive new IDs and are added to your workspace.</p><label className="primary-action cursor-pointer">Choose file<input className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></label></div><div className="feature-card flex-col items-start"><Cloud size={25}/><b>Export all widgets</b><p>Export {widgets.length} configured widget(s), including appearance, position and widget data.</p><button className="primary-action" disabled={!widgets.length} onClick={exportAll}>Export JSON</button></div></div>{message&&<div className={`content-panel mt-4 text-sm ${isError ? "border-red-500 bg-red-50 text-red-700" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"}`}>{message}</div>}<Panel title="Individual widgets"><div className="space-y-2">{widgets.map(w=><div className="flex items-center rounded-lg bg-black/5 p-3 text-sm" key={w.id}><b>{w.name}</b><span className="ml-2 text-xs text-muted">{w.type}</span><button className="ml-auto text-indigo-600 dark:text-indigo-400 font-semibold" onClick={()=>downloadJson(`${safeName(w.name)}.widget.json`,{version:2,widgets:[w]})}>Export</button></div>)}</div></Panel></Page>
+  return <Page title="Import & export" subtitle="Share widget configurations as portable JSON files."><div className="grid grid-cols-2 gap-4"><div className="feature-card flex-col items-start"><Download size={25}/><b>Import widgets</b><p>Select a Widget Studio JSON export. Imported widgets receive new IDs and are added to your workspace.</p><label className="primary-action cursor-pointer">Choose file<input className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></label></div><div className="feature-card flex-col items-start"><Cloud size={25}/><b>Export all widgets</b><p>Export {widgets.length} configured widget(s), including appearance, position and widget data.</p><button type="button" className="primary-action" disabled={!widgets.length} onClick={exportAll}>Export JSON</button></div></div>{message&&<div className={`content-panel mt-4 text-sm ${isError ? "border-red-500 bg-red-50 text-red-700" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"}`}>{message}</div>}<Panel title="Individual widgets"><div className="space-y-2">{widgets.map(w=><div className="flex items-center rounded-lg bg-black/5 p-3 text-sm" key={w.id}><b>{w.name}</b><span className="ml-2 text-xs text-muted">{w.type}</span><button type="button" className="ml-auto text-indigo-600 dark:text-indigo-400 font-semibold" onClick={()=>void exportJson(`${safeName(w.name)}.widget.json`,{version:2,widgets:[w]})}>Export</button></div>)}</div></Panel></Page>
 }
 
-function downloadJson(name:string,value:unknown){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)}
+function downloadJson(name:string,value:unknown){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.style.display="none";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url)}
 function safeName(value:string){return value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"widget"}
 
 function Layouts({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}){const {layouts,saveLayout,deleteLayout,renameLayout}=useManagerStore();return <Page title="Desktop layouts" subtitle="Save arrangements and switch context instantly." action={<button className="primary-action" onClick={()=>saveLayout(`Layout ${layouts.length+1}`,widgets)}><Plus size={15}/> Save current</button>}><div className="grid grid-cols-3 gap-4">{layouts.length===0?<div className="content-panel col-span-3 text-sm text-muted">No saved layouts. Save the current canvas to create one.</div>:layouts.map((x,i)=><div className="layout-card" key={x.id}><button className={`layout-preview lp-${i}`} onClick={()=>onSetWidgets(structuredClone(x.widgets))}><span/><span/><span/></button><div className="mt-3 flex items-center gap-2"><div className="flex-1 min-w-0"><input type="text" value={x.name} onChange={(e)=>renameLayout(x.id,e.target.value)} className="bg-transparent font-semibold outline-none border-b border-transparent hover:border-black/10 focus:border-accent w-full text-sm py-0.5" /><p className="text-[11px] text-muted mt-0.5">{x.widgets.length} widgets · {new Date(x.updatedAt).toLocaleDateString()}</p></div><button title="Delete layout" onClick={()=>deleteLayout(x.id)} className="ml-auto text-red-500 hover:text-red-700 px-1">×</button></div></div>)}</div></Page>}
