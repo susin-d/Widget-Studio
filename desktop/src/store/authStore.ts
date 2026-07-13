@@ -104,7 +104,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   logout: () => {
     localStorage.removeItem("widget-studio-token");
     localStorage.removeItem("widget-studio-email");
-    set({ token: null, email: null, error: null, syncStatus: "offline", lastSyncedAt: null, sessionSource: null });
+    set((state) => ({
+      token: null,
+      email: null,
+      error: null,
+      syncStatus: "offline",
+      lastSyncedAt: null,
+      sessionSource: null,
+      sessionVersion: state.sessionVersion + 1,
+    }));
   },
 
   setSyncStatus: (syncStatus) => set({ syncStatus }),

@@ -148,7 +148,9 @@ export function App() {
   // Initialize auth session and load state
   useEffect(() => {
     const loadState = isWidgetWindow ? loadLocalPersistedState : loadPersistedState;
-    if (!isWidgetWindow) useAuthStore.getState().initialize();
+    // Widget windows need the same persisted session as the main window so
+    // authenticated features such as the AI chatbot work in floating overlays.
+    useAuthStore.getState().initialize();
     loadState().then((state) => {
       applyLoadedState(state);
       initialStateLoaded.current = true;

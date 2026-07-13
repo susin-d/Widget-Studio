@@ -70,6 +70,7 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
     const window = getCurrentWindow();
     const frame = frameRef.current;
     if (!frame) return;
+    let lastSize: { width: number; height: number } | null = null;
 
     const syncWindowSize = () => {
       const rect = frame.getBoundingClientRect();
@@ -80,12 +81,13 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
       const width = Math.ceil(Math.max(rect.width, menuRect ? menuLeft + menuRect.width : 0));
       const height = Math.ceil(Math.max(rect.height, menuRect ? menuTop + menuRect.height : 0));
       if (width <= 0 || height <= 0) return;
+      if (lastSize?.width === width && lastSize.height === height) return;
+      lastSize = { width, height };
       void window.setSize(new LogicalSize(width, height)).catch(() => undefined);
     };
 
     syncWindowSize();
     const observer = new ResizeObserver(syncWindowSize);
-    observer.observe(frame);
     const menuElement = frame.querySelector<HTMLElement>("[data-menu]");
     if (menuElement) observer.observe(menuElement);
     return () => observer.disconnect();
