@@ -28,8 +28,8 @@ interface AuthStore {
 
 const configuredBackendUrl = import.meta.env.VITE_BACKEND_URL?.trim();
 
-// The deployed website and API share an origin on Vercel. Keep local Vite
-// development pointed at the standalone Uvicorn server when no override exists.
+// Separate Vercel deployments use VITE_BACKEND_URL for the standalone API.
+// Keep local Vite development pointed at the Uvicorn server when no override exists.
 export const BACKEND_URL = configuredBackendUrl ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 export const useAuthStore = create<AuthStore>((set, get) => ({

@@ -74,4 +74,4 @@ python -m server.init_db
 
 ## Vercel
 
-The repository root contains `api/index.py`, `requirements.txt`, `.python-version`, and `vercel.json` for Vercel’s Python runtime. Deploy from the repository root so Vercel can build both the `website/` Vite app and the FastAPI function. Configure `DATABASE_URL`, `SECRET_KEY`, `GOOGLE_REDIRECT_URI`, and `WEB_AUTH_REDIRECT_URI` in the Vercel project settings, then run `python -m server.init_db` once against that external database. Keep `AUTO_CREATE_SCHEMA=false` in production; Vercel function instances do not provide persistent local storage and can start concurrently.
+The API is deployed as a separate Vercel project from the repository root. The root `vercel.json` only configures the Python function at `api/index.py`; leave the API project's build and output settings empty. Configure `DATABASE_URL`, `SECRET_KEY`, `GOOGLE_REDIRECT_URI`, and `WEB_AUTH_REDIRECT_URI` in the API project settings, then run `python -m server.init_db` once against the external database. Keep `AUTO_CREATE_SCHEMA=false` in production; Vercel function instances do not provide persistent local storage and can start concurrently.

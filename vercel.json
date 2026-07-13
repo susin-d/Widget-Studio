@@ -1,14 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm --prefix website ci",
-  "buildCommand": "npm --prefix website run build",
-  "outputDirectory": "website/dist",
-  "rewrites": [
-    {
-      "source": "/auth/callback",
-      "destination": "/index.html"
-    }
-  ],
   "functions": {
     "api/index.py": {
       "maxDuration": 60

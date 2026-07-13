@@ -142,39 +142,54 @@ npm run tauri:dev
 
 ---
 
-## ☁️ Deploying Website and API to Vercel
+## ☁️ Deploying Website and API as Separate Vercel Projects
 
-The repository now deploys as one Vercel project from the repository root:
+Create two Vercel projects from this same repository:
 
-- `website/` is built with Vite and served from `website/dist`.
+### 1. API project
+
+- **Root Directory:** repository root (`.`)
+- **Framework Preset:** Other
+- **Build Command:** leave empty
+- **Output Directory:** leave empty
 - `api/index.py` exposes the FastAPI app as a Vercel Python Function.
 - `/api/*` keeps the same API paths used by local development and the desktop client.
 
-Create a Vercel project with the repository root as its Root Directory, then add these environment variables in the Vercel dashboard:
+Add these environment variables to the API project:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<database>
+DATABASE_URL=postgresql://<user>:<password>@<host>/<database>
 SECRET_KEY=<long-random-production-secret>
 AUTO_CREATE_SCHEMA=false
 GOOGLE_CLIENT_ID=<google-client-id>
 GOOGLE_CLIENT_SECRET=<google-client-secret>
-GOOGLE_REDIRECT_URI=https://<your-domain>/api/auth/google/callback
-WEB_AUTH_REDIRECT_URI=https://<your-domain>/auth/callback
+GOOGLE_REDIRECT_URI=https://<api-domain>/api/auth/google/callback
+WEB_AUTH_REDIRECT_URI=https://<website-domain>/auth/callback
 OPENAI_API_KEY=<optional>
 ```
+
+### 2. Website project
+
+- **Root Directory:** `website`
+- **Framework Preset:** Vite
+- The committed `website/vercel.json` builds with `npm run build` and publishes `dist`.
+
+Add this environment variable to the Website project before deploying:
+
+```env
+VITE_BACKEND_URL=https://<api-domain>
+```
+
+Because Vite embeds `VITE_BACKEND_URL` at build time, redeploy the website after changing it.
 
 Use a managed PostgreSQL database for `DATABASE_URL`; Vercel function instances and their local filesystem are ephemeral. Apply the existing schema once before enabling signup or layout sync:
 
 ```powershell
-$env:DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>/<database>"
+$env:DATABASE_URL="postgresql://<user>:<password>@<host>/<database>"
 python -m server.init_db
 ```
 
-The public health check is available at `https://<your-domain>/api/health`.
-
-When the website and API share the same Vercel project, leave `VITE_BACKEND_URL` unset (or set it to an empty value); the website uses same-origin `/api` requests in production. For local development, use `VITE_BACKEND_URL=http://localhost:8000`. Add the production callback URL to the Google OAuth client configuration as well.
-
-The committed `vercel.json` runs `npm --prefix website ci`, builds the website, and publishes the `website/dist` output while Vercel discovers the Python function from `api/index.py`.
+The API health check is available at `https://<api-domain>/api/health`. Add the API callback URL to Google Cloud OAuth, and use the website callback URL as the web redirect target.
 
 ---
 
