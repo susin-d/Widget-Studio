@@ -67,6 +67,8 @@ export interface AppSettings {
   lockPositions: boolean;
   skipTaskbar: boolean;
   desktopMode: boolean;
+  batterySaverAutomation: boolean;
+  focusHoursAutomation: boolean;
   onboardingComplete: boolean;
 }
 

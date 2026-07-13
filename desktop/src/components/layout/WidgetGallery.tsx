@@ -1,9 +1,8 @@
-import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Settings, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
 import type { ReactNode } from "react";
 import { isTauri, nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
-import { Button } from "../ui/Button";
 
 export const widgetGallery: Array<{ type: WidgetKind; label: string; icon: ReactNode }> = [
   { type: "clock", label: "Clock", icon: <Clock size={16} /> },
@@ -24,11 +23,10 @@ export const widgetGallery: Array<{ type: WidgetKind; label: string; icon: React
 interface WidgetGalleryProps {
   selectedWidgetId: string | null;
   onSelectWidget: (id: string | null) => void;
-  onSettings: () => void;
   onOpenDeveloper?: (id: string) => void;
 }
 
-export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, onOpenDeveloper }: WidgetGalleryProps) {
+export function WidgetGallery({ selectedWidgetId, onSelectWidget, onOpenDeveloper }: WidgetGalleryProps) {
   const widgets = useWidgetStore((state) => state.widgets);
   const addWidget = useWidgetStore((state) => state.addWidget);
   const duplicateWidget = useWidgetStore((state) => state.duplicateWidget);
@@ -56,7 +54,7 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
       </div>
 
       {/* Widget Library — compact grid */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto border-b border-black/8 px-3 pt-3 pb-2">
         <div className="space-y-1">
           {widgetGallery.map((item) => (
             <button
@@ -86,11 +84,10 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
       {widgets.length > 0 && (
         <>
           <div className="mx-3 my-1 border-t border-black/8" />
-          <div className="px-4 pb-1 pt-2">
+          <div className="min-h-0 flex-1 px-4 pb-1 pt-2">
             <div className="text-[11px] font-semibold uppercase tracking-widest text-muted">Active</div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            <div className="space-y-1">
+            <div className="mt-1 h-[calc(100%-1.25rem)] overflow-y-auto pr-1">
+              <div className="space-y-1">
               {widgets.map((widget) => {
                 const selected = widget.id === selectedWidgetId;
                 return (
@@ -120,21 +117,13 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
         </>
       )}
 
-      {widgets.length === 0 && (
-        <div className="flex-1" />
-      )}
-
-      {/* Footer */}
-      <div className="border-t border-black/8 px-3 py-2.5">
-        <Button className="w-full justify-start text-xs" icon={<Settings size={14} />} onClick={onSettings}>
-          Settings
-        </Button>
-      </div>
+      {widgets.length === 0 && <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3" />}
     </aside>
   );
 }

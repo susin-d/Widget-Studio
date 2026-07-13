@@ -92,7 +92,13 @@ body {
     linear-gradient(130deg, #4752d9 8%, #ab54da 48%, #3c82e8 75%, #25c6dd),
     radial-gradient(circle at 1px 1px, rgb(var(--muted) / 0.18) 1px, transparent 0);
   background-size: auto, auto, auto, auto, 24px 24px;
+  scrollbar-color: rgb(var(--accent) / .75) rgb(var(--panel) / .45);
+  scrollbar-width: thin;
 }
+.widget-canvas::-webkit-scrollbar { width: 10px; height: 10px; }
+.widget-canvas::-webkit-scrollbar-track { background: rgb(var(--panel) / .45); }
+.widget-canvas::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgb(var(--accent) / .75); background-clip: padding-box; }
+.widget-canvas::-webkit-scrollbar-corner { background: rgb(var(--panel) / .45); }
 .library-row > button { width: 100%; justify-content: flex-start; border: 1px solid rgb(80 90 130 / .08); background: rgb(255 255 255 / .9) !important; color: rgb(var(--text)) !important; box-shadow: 0 2px 9px rgb(50 60 100 / .08); }
 .library-row > button:hover { border-color: rgb(var(--accent) / .28); background: white !important; transform: translateY(-1px); }
 [data-theme="dark"] .library-row > button { background: rgb(var(--panel) / .8) !important; border-color: rgb(255 255 255 / .1); }

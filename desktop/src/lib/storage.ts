@@ -21,6 +21,8 @@ export const defaultSettings: AppSettings = {
   lockPositions: false,
   skipTaskbar: false,
   desktopMode: false,
+  batterySaverAutomation: true,
+  focusHoursAutomation: false,
   onboardingComplete: false
 };
 
@@ -34,8 +36,7 @@ export function resetCloudSyncCursor(): void {
   lastCloudUpdatedAt = null;
 }
 
-export async function loadPersistedState(): Promise<PersistedState> {
-  // Try loading from local storage first as a starting point
+export async function loadLocalPersistedState(): Promise<PersistedState> {
   let localState: PersistedState = emptyState();
   try {
     if (isTauri) {
@@ -48,6 +49,13 @@ export async function loadPersistedState(): Promise<PersistedState> {
   } catch (err) {
     console.warn("Failed to load local state", err);
   }
+
+  return localState;
+}
+
+export async function loadPersistedState(): Promise<PersistedState> {
+  // Use the local layout immediately, then let the main window reconcile with cloud state.
+  const localState = await loadLocalPersistedState();
 
   // If user has active cloud session, fetch from cloud
   const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();

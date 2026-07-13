@@ -1,12 +1,12 @@
 import { ArrowUpRight, Check, Cloud, Cpu, Download, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Plus, RotateCw, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ManagerView } from "./ManagerNavigation";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
 import { useManagerStore } from "../../store/managerStore";
-import { nativeApi, type SystemInfo } from "../../lib/tauri";
 import { useAuthStore, BACKEND_URL } from "../../store/authStore";
 import { savePersistedState } from "../../lib/storage";
 import { WidgetBuilder } from "../developer/WidgetBuilder";
+import { useSystemInfo } from "../../hooks/useSystemInfo";
 
 
 
@@ -213,25 +213,9 @@ function SyncPage({ widgets, settings, onSetWidgets }: { widgets: DesktopWidget[
 function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopWidget[]; onOpenWidgets: () => void; onSetWidgets?: (widgets: DesktopWidget[]) => void }) {
   const { backup, restoreBackup, lastBackup, notices } = useManagerStore();
   const { token, syncStatus, lastSyncedAt } = useAuthStore();
-  const [sysCpu, setSysCpu] = useState<number | null>(null);
-  const [sysRam, setSysRam] = useState<number | null>(null);
-
-  useEffect(() => {
-    const fetchStats = () => {
-      nativeApi.getSystemInfo()
-        .then((info) => {
-          setSysCpu(Math.round(info.cpu_usage));
-          setSysRam(Math.round((info.ram_used / Math.max(info.ram_total, 1)) * 100));
-        })
-        .catch(() => {
-          setSysCpu(null);
-          setSysRam(null);
-        });
-    };
-    fetchStats();
-    const id = setInterval(fetchStats, 5000);
-    return () => clearInterval(id);
-  }, []);
+  const systemInfo = useSystemInfo();
+  const sysCpu = systemInfo ? Math.round(systemInfo.cpu_usage) : null;
+  const sysRam = systemInfo ? Math.round((systemInfo.ram_used / Math.max(systemInfo.ram_total, 1)) * 100) : null;
 
   const handleBackup = () => {
     backup(widgets);
@@ -317,9 +301,43 @@ function safeName(value:string){return value.trim().toLowerCase().replace(/[^a-z
 
 function Layouts({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}){const {layouts,saveLayout,deleteLayout,renameLayout}=useManagerStore();return <Page title="Desktop layouts" subtitle="Save arrangements and switch context instantly." action={<button className="primary-action" onClick={()=>saveLayout(`Layout ${layouts.length+1}`,widgets)}><Plus size={15}/> Save current</button>}><div className="grid grid-cols-3 gap-4">{layouts.length===0?<div className="content-panel col-span-3 text-sm text-muted">No saved layouts. Save the current canvas to create one.</div>:layouts.map((x,i)=><div className="layout-card" key={x.id}><button className={`layout-preview lp-${i}`} onClick={()=>onSetWidgets(structuredClone(x.widgets))}><span/><span/><span/></button><div className="mt-3 flex items-center gap-2"><div className="flex-1 min-w-0"><input type="text" value={x.name} onChange={(e)=>renameLayout(x.id,e.target.value)} className="bg-transparent font-semibold outline-none border-b border-transparent hover:border-black/10 focus:border-accent w-full text-sm py-0.5" /><p className="text-[11px] text-muted mt-0.5">{x.widgets.length} widgets · {new Date(x.updatedAt).toLocaleDateString()}</p></div><button title="Delete layout" onClick={()=>deleteLayout(x.id)} className="ml-auto text-red-500 hover:text-red-700 px-1">×</button></div></div>)}</div></Page>}
 
-function Performance({widgets}:{widgets:DesktopWidget[]}){const [info,setInfo]=useState<SystemInfo|null>(null);useEffect(()=>{const load=()=>void nativeApi.getSystemInfo().then(setInfo).catch(()=>setInfo(null));load();const id=setInterval(load,5000);return()=>clearInterval(id)},[]);const ram=info?`${(info.ram_used/1024/1024/1024).toFixed(1)} GB`:"Unavailable";return <Page title="Performance" subtitle="Live system metrics refresh every five seconds."><div className="grid grid-cols-3 gap-4"><div className="metric-card"><Cpu/><b className="mt-4 text-2xl">{info?`${info.cpu_usage.toFixed(1)}%`:"Unavailable"}</b><span>System CPU</span></div><div className="metric-card"><MemoryStick/><b className="mt-4 text-2xl">{ram}</b><span>System memory used</span></div><div className="metric-card"><Zap/><b className="mt-4 text-2xl">{widgets.length}</b><span>Configured widgets</span></div></div><Panel title="Widget configuration">{widgets.map(w=><div className="perf-row" key={w.id}><b>{w.name}</b><div className="perf-bar"><span style={{width:`${Math.min(100,w.settings.refreshInterval/3)}%`}}/></div><span>{w.settings.refreshInterval}s</span><span>{w.pinned?"Running":"Canvas"}</span></div>)}</Panel></Page>}
+function Performance({widgets}:{widgets:DesktopWidget[]}){const info=useSystemInfo();const ram=info?`${(info.ram_used/1024/1024/1024).toFixed(1)} GB`:"Unavailable";const nameCounts=new Map<string,number>();const labels=widgets.map((widget)=>{const count=(nameCounts.get(widget.name)||0)+1;nameCounts.set(widget.name,count);return count===1?widget.name:`${widget.name} ${count}`});return <Page title="Performance" subtitle="Live system metrics refresh every five seconds."><div className="grid grid-cols-3 gap-4"><div className="metric-card"><Cpu/><b className="mt-4 text-2xl">{info?`${info.cpu_usage.toFixed(1)}%`:"Unavailable"}</b><span>System CPU</span></div><div className="metric-card"><MemoryStick/><b className="mt-4 text-2xl">{ram}</b><span>System memory used</span></div><div className="metric-card"><Zap/><b className="mt-4 text-2xl">{widgets.length}</b><span>Configured widgets</span></div></div><Panel title="Widget configuration">{widgets.map((w,index)=><div className="perf-row" key={w.id}><b>{labels[index]}</b><div className="perf-bar"><span style={{width:`${Math.min(100,w.settings.refreshInterval/3)}%`}}/></div><span>{w.settings.refreshInterval}s</span><span>{w.pinned?"Running":"Canvas"}</span></div>)}</Panel></Page>}
 
 import { useSettingsStore } from "../../store/settingsStore";
+
+function Automations({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
+  const { settings, updateSetting } = useSettingsStore();
+  const systemInfo = useSystemInfo();
+  const originalSettings = useRef(new Map<string, DesktopWidget["settings"]>());
+  const originalHidden = useRef(new Map<string, boolean | undefined>());
+  const batteryActive = settings.batterySaverAutomation && systemInfo?.battery_level != null && systemInfo.battery_level < 20;
+
+  useEffect(() => {
+    if (batteryActive) {
+      onSetWidgets(widgets.map((widget) => {
+        if (!originalSettings.current.has(widget.id)) originalSettings.current.set(widget.id, widget.settings);
+        return { ...widget, settings: { ...widget.settings, background: "solid", opacity: Math.min(widget.settings.opacity, 0.7) } };
+      }));
+    } else if (originalSettings.current.size) {
+      onSetWidgets(widgets.map((widget) => ({ ...widget, settings: originalSettings.current.get(widget.id) || widget.settings })));
+      originalSettings.current.clear();
+    }
+  }, [batteryActive]);
+
+  useEffect(() => {
+    if (settings.focusHoursAutomation) {
+      onSetWidgets(widgets.map((widget) => {
+        if (!originalHidden.current.has(widget.id)) originalHidden.current.set(widget.id, widget.hidden);
+        return ["clock", "calendar", "worldclock"].includes(widget.type) ? widget : { ...widget, hidden: true };
+      }));
+    } else if (originalHidden.current.size) {
+      onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: originalHidden.current.get(widget.id) })));
+      originalHidden.current.clear();
+    }
+  }, [settings.focusHoursAutomation]);
+
+  return <Page title="Automations" subtitle="Trigger automated changes based on desktop and battery events."><div className="content-panel max-w-2xl space-y-4 text-sm"><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Battery Saver Auto-mode</b><span className="text-xs text-muted">Reduces widget transparency below 20% battery. Current battery: {systemInfo?.battery_level != null ? `${systemInfo.battery_level}%` : "unavailable"}.</span></div><input type="checkbox" checked={settings.batterySaverAutomation} onChange={() => updateSetting("batterySaverAutomation", !settings.batterySaverAutomation)} className="h-5 w-5 accent-accent" /></label><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Workspace Focus Hours</b><span className="text-xs text-muted">Hides non-essential widgets while enabled; clocks and calendars remain visible.</span></div><input type="checkbox" checked={settings.focusHoursAutomation} onChange={() => updateSetting("focusHoursAutomation", !settings.focusHoursAutomation)} className="h-5 w-5 accent-accent" /></label></div></Page>;
+}
 
 function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
   const { settings, updateSetting } = useSettingsStore();
@@ -419,30 +437,7 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
   }
 
   if (view === "automations") {
-    return (
-      <Page title="Automations" subtitle="Trigger automated changes based on desktop and battery events.">
-        <div className="content-panel max-w-2xl text-sm space-y-4">
-          <div className="p-3 bg-black/5 rounded-lg dark:bg-white/5 flex items-center justify-between">
-            <div>
-              <b className="block">Battery Saver Auto-mode</b>
-              <span className="text-xs text-muted">Automatically disable background transparency & opacity when battery falls below 20%.</span>
-            </div>
-            <label className="flex items-center cursor-pointer">
-              <input type="checkbox" defaultChecked className="h-5 w-5 accent-accent" />
-            </label>
-          </div>
-          <div className="p-3 bg-black/5 rounded-lg dark:bg-white/5 flex items-center justify-between">
-            <div>
-              <b className="block">Workspace Focus Hours</b>
-              <span className="text-xs text-muted">Hide all non-essential widgets when coding or when system is busy.</span>
-            </div>
-            <label className="flex items-center cursor-pointer">
-              <input type="checkbox" className="h-5 w-5 accent-accent" />
-            </label>
-          </div>
-        </div>
-      </Page>
-    );
+    return <Automations widgets={widgets} onSetWidgets={onSetWidgets} />;
   }
 
   if (view === "plugins") {

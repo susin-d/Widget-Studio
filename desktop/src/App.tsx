@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppWindow, Download, EyeOff, Grid3X3, LoaderCircle, Moon, Pin, Redo2, RotateCcw, Undo2 } from "lucide-react";
-import { loadPersistedState, resetCloudSyncCursor, saveLocalPersistedState, savePersistedState, syncPersistedStateToCloud } from "./lib/storage";
+import { loadLocalPersistedState, loadPersistedState, resetCloudSyncCursor, saveLocalPersistedState, savePersistedState, syncPersistedStateToCloud } from "./lib/storage";
 import { isTauri, nativeApi } from "./lib/tauri";
 import { checkForUpdates, installUpdate } from "./lib/updater";
 import { useSettingsStore } from "./store/settingsStore";
@@ -87,6 +87,11 @@ export function App() {
   const persisted = useMemo(() => ({ version: 2, widgets, settings }), [widgets, settings]);
   const isWidgetWindow = Boolean(widgetWindowId);
   const selectedWidget = widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
+  const canvasScale = canvasZoom / 100;
+  const canvasBounds = useMemo(() => ({
+    width: Math.max(960, ...widgets.map((widget) => widget.rect.x + widget.rect.width + 96)),
+    height: Math.max(640, ...widgets.map((widget) => widget.rect.y + widget.rect.height + 96))
+  }), [widgets]);
   const token = useAuthStore((state) => state.token);
   const sessionVersion = useAuthStore((state) => state.sessionVersion);
   const sessionSource = useAuthStore((state) => state.sessionSource);
@@ -142,12 +147,13 @@ export function App() {
 
   // Initialize auth session and load state
   useEffect(() => {
-    useAuthStore.getState().initialize();
-    loadPersistedState().then((state) => {
+    const loadState = isWidgetWindow ? loadLocalPersistedState : loadPersistedState;
+    if (!isWidgetWindow) useAuthStore.getState().initialize();
+    loadState().then((state) => {
       applyLoadedState(state);
       initialStateLoaded.current = true;
     });
-  }, [applyLoadedState]);
+  }, [applyLoadedState, isWidgetWindow]);
 
   useEffect(() => {
     if (isWidgetWindow || !isTauri) return;
@@ -158,7 +164,7 @@ export function App() {
   // Email/password and web OAuth establish a session after the initial load. Pull the
   // cloud layout for login/OAuth, while a new signup publishes the current local layout.
   useEffect(() => {
-    if (!initialStateLoaded.current || !token || sessionVersion === handledSessionVersion.current) return;
+    if (isWidgetWindow || !initialStateLoaded.current || !token || sessionVersion === handledSessionVersion.current) return;
     handledSessionVersion.current = sessionVersion;
 
     if (sessionSource === "signup") {
@@ -168,10 +174,11 @@ export function App() {
     }
 
     void loadPersistedState().then(applyLoadedState);
-  }, [applyLoadedState, persisted, sessionSource, sessionVersion, token]);
+  }, [applyLoadedState, isWidgetWindow, persisted, sessionSource, sessionVersion, token]);
 
   // Deep Link handler for OAuth redirects
   useEffect(() => {
+    if (isWidgetWindow) return;
     let unlistenDeepLink: (() => void) | undefined;
     let unlistenSingleInstance: (() => void) | undefined;
     if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
@@ -220,7 +227,7 @@ export function App() {
       unlistenDeepLink?.();
       unlistenSingleInstance?.();
     };
-  }, [hydrate, setSettings]);
+  }, [hydrate, isWidgetWindow, setSettings]);
 
   useEffect(() => {
     let activeTheme = settings.theme;
@@ -237,7 +244,7 @@ export function App() {
   }, [settings.theme, settings.colorTheme, settings.accentColor, isWidgetWindow, widgetWindowId, widgets]);
 
   useEffect(() => {
-    if (!initialStateLoaded.current) return;
+    if (isWidgetWindow || !initialStateLoaded.current) return;
 
     const localTimer = window.setTimeout(() => void saveLocalPersistedState(persisted), 250);
     const cloudTimer = window.setTimeout(() => void syncPersistedStateToCloud(persisted), 1800);
@@ -245,7 +252,7 @@ export function App() {
       window.clearTimeout(localTimer);
       window.clearTimeout(cloudTimer);
     };
-  }, [persisted]);
+  }, [isWidgetWindow, persisted]);
 
   useEffect(() => {
     if (!selectedWidgetId || widgets.some((widget) => widget.id === selectedWidgetId)) return;
@@ -284,6 +291,7 @@ export function App() {
   }, [isWidgetWindow, widgets]);
 
   useEffect(() => {
+    if (isWidgetWindow) return;
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "k" || (event.shiftKey && event.key.toLowerCase() === "p"))) { event.preventDefault(); setSearchOpen(true); }
       if (event.key === "Escape") setSearchOpen(false);
@@ -292,7 +300,7 @@ export function App() {
       if (selectedWidgetId && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key) && !(event.target instanceof HTMLInputElement) && !(event.target instanceof HTMLTextAreaElement)) { event.preventDefault(); const ids=selectedWidgetIds.length?selectedWidgetIds:[selectedWidgetId];const amount=event.shiftKey?10:1;useWidgetStore.getState().widgets.filter(w=>ids.includes(w.id)&&!w.locked).forEach(widget=>updateRect(widget.id,{x:widget.rect.x+(event.key==="ArrowLeft"?-amount:event.key==="ArrowRight"?amount:0),y:widget.rect.y+(event.key==="ArrowUp"?-amount:event.key==="ArrowDown"?amount:0)}))}
     };
     window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
-  }, [redo,selectedWidgetId,selectedWidgetIds,undo,updateRect]);
+  }, [isWidgetWindow,redo,selectedWidgetId,selectedWidgetIds,undo,updateRect]);
 
   const openAll = () => {
     widgets.forEach((widget) => {
@@ -357,37 +365,15 @@ export function App() {
   }
 
   return (
-    <main className="app-shell flex h-full flex-col bg-surface/80 text-text">
-      <header className="studio-titlebar flex h-11 shrink-0 items-center px-4">
-        <img src="/widget-studio-logo.png" alt="Widget Studio" className="app-logo h-6 w-6 rounded-md" />
-        <strong className="ml-2 text-sm">Widget Studio</strong>
-        <div className="ml-auto flex items-center gap-1"><button className="title-action" onClick={() => void nativeApi.minimize()}>—</button><button className="title-action" onClick={() => void nativeApi.toggleMaximize()}><AppWindow size={14} /></button><button className="title-action close" onClick={() => void nativeApi.close()}>×</button></div>
-      </header>
+    <main className="app-shell flex h-full flex-col bg-surface/80 text-text" data-tauri-drag-region>
       <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
       <ManagerNavigation view={managerView} onView={handleManagerViewChange} onSearch={() => setSearchOpen(true)} />
       {managerView !== "widgets" ? <Suspense fallback={<div className="content-panel flex-1 text-sm text-muted">Loading workspace…</div>}><ManagerPage view={managerView} widgets={widgets} onSetWidgets={setWidgets} editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null} onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }} onOpenWidgets={() => setManagerView("widgets")} /></Suspense> : <>
-      <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onSettings={() => setManagerView("settings")} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
+      <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
       <section
-        className="widget-canvas relative flex-1 overflow-hidden"
-        onPointerDown={(event) => {
-          if (event.target === event.currentTarget) {setSelectedWidgetId(null);setSelectedWidgetIds([])}
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "copy";
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          const type = event.dataTransfer.getData("application/widget-kind");
-          if (!type) return;
-          const canvasRect = event.currentTarget.getBoundingClientRect();
-          const dropX = (event.clientX - canvasRect.left) / (canvasZoom / 100);
-          const dropY = (event.clientY - canvasRect.top) / (canvasZoom / 100);
-          const newWidget = addWidget(type as any, { rect: { x: Math.round(dropX), y: Math.round(dropY) } });
-          setSelectedWidgetId(newWidget.id);
-        }}
+        className="widget-canvas relative min-h-0 min-w-0 flex-1 overflow-auto"
       >
-        <div className="absolute left-0 right-0 top-0 z-20 rounded-t-xl border-b border-black/10 bg-panel/80 backdrop-blur-xl dark:border-white/10">
+        <div className="sticky left-0 right-0 top-0 z-20 rounded-t-xl border-b border-black/10 bg-panel/80 backdrop-blur-xl dark:border-white/10">
           <div className="flex items-center gap-2 px-4 py-2.5">
             <span className="mr-auto text-sm font-semibold text-text/80">Canvas</span>
             <Button disabled={!canUndo} icon={<Undo2 size={14}/>} onClick={undo}>Undo</Button>
@@ -398,25 +384,52 @@ export function App() {
             <Button disabled={widgets.length === 0} icon={<RotateCcw size={14} />} onClick={resetLayout}>Reset</Button>
           </div>
         </div>
-        {widgets.length === 0 && (
-          <div className="flex h-full items-center justify-center px-8 text-center text-muted">
-            <div>
-              <div className="text-lg font-semibold text-text">Choose a widget from the sidebar</div>
-              <p className="mt-2 max-w-sm text-sm">Use the plus button to edit on this canvas, or the pin button to open it directly as a desktop overlay.</p>
+        <div
+          className="relative"
+          style={{
+            width: canvasBounds.width * canvasScale,
+            height: canvasBounds.height * canvasScale,
+            minWidth: "100%",
+            minHeight: "calc(100% - 84px)"
+          }}
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {setSelectedWidgetId(null);setSelectedWidgetIds([])}
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const type = event.dataTransfer.getData("application/widget-kind");
+            if (!type) return;
+            const canvasRect = event.currentTarget.getBoundingClientRect();
+            const dropX = (event.clientX - canvasRect.left) / canvasScale;
+            const dropY = (event.clientY - canvasRect.top) / canvasScale;
+            const newWidget = addWidget(type as any, { rect: { x: Math.round(dropX), y: Math.round(dropY) } });
+            setSelectedWidgetId(newWidget.id);
+          }}
+        >
+          {widgets.length === 0 && (
+            <div className="flex h-full items-center justify-center px-8 text-center text-muted">
+              <div>
+                <div className="text-lg font-semibold text-text">Choose a widget from the sidebar</div>
+                <p className="mt-2 max-w-sm text-sm">Use the plus button to edit on this canvas, or the pin button to open it directly as a desktop overlay.</p>
+              </div>
             </div>
-          </div>
-        )}
-        <div style={{transform:`scale(${canvasZoom/100})`,transformOrigin:"top left"}}><AnimatePresence>
-          {widgets.map((widget) => (
-            <WidgetFrame
-              key={widget.id}
-              widget={widget}
-              selected={widget.id === selectedWidgetId}
-              onSelect={(additive) => {setSelectedWidgetId(widget.id);setSelectedWidgetIds(ids=>additive?(ids.includes(widget.id)?ids.filter(id=>id!==widget.id):[...ids,widget.id]):[widget.id])}}
-            />
-          ))}
-        </AnimatePresence></div>
-        <div className="canvas-status absolute bottom-0 left-0 right-0 z-20 flex h-10 items-center gap-2 border-t border-black/10 bg-panel/85 px-3 text-xs text-muted backdrop-blur-xl">
+          )}
+          <div style={{width:canvasBounds.width,height:canvasBounds.height,transform:`scale(${canvasScale})`,transformOrigin:"top left"}}><AnimatePresence>
+            {widgets.map((widget) => (
+              <WidgetFrame
+                key={widget.id}
+                widget={widget}
+                selected={widget.id === selectedWidgetId}
+                onSelect={(additive) => {setSelectedWidgetId(widget.id);setSelectedWidgetIds(ids=>additive?(ids.includes(widget.id)?ids.filter(id=>id!==widget.id):[...ids,widget.id]):[widget.id])}}
+              />
+            ))}
+          </AnimatePresence></div>
+        </div>
+        <div className="canvas-status sticky bottom-0 left-0 right-0 z-20 flex h-10 items-center gap-2 border-t border-black/10 bg-panel/85 px-3 text-xs text-muted backdrop-blur-xl">
           <div className="flex items-center rounded-lg bg-black/5"><button className="px-2.5 py-1.5" onClick={()=>setCanvasZoom(x=>Math.max(50,x-10))}>−</button><span className="px-2 text-text">{canvasZoom}%</span><button className="px-2.5 py-1.5" onClick={()=>setCanvasZoom(x=>Math.min(200,x+10))}>＋</button></div>
           <div className="mx-auto" />
           <button onClick={()=>updateSetting("snapToGrid",!settings.snapToGrid)} className="flex items-center gap-1.5 rounded-lg bg-black/5 px-2.5 py-1.5"><Grid3X3 size={13} /> Grid <span className={settings.snapToGrid?"toggle-on":"toggle-off"} /></button>

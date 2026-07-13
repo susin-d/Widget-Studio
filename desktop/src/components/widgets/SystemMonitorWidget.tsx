@@ -1,15 +1,8 @@
-import { useEffect, useState } from "react";
 import { Cpu } from "lucide-react";
-import { nativeApi, type SystemInfo } from "../../lib/tauri";
+import { useSystemInfo } from "../../hooks/useSystemInfo";
 
 export function SystemMonitorWidget() {
-  const [info, setInfo] = useState<SystemInfo | null>(null);
-  useEffect(() => {
-    const load = () => nativeApi.getSystemInfo().then(setInfo).catch(() => setInfo(null));
-    load();
-    const timer = window.setInterval(load, 5000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const info = useSystemInfo();
   const ram = info ? Math.round((info.ram_used / Math.max(info.ram_total, 1)) * 100) : 0;
   return (
     <div className="space-y-4">

@@ -3,10 +3,13 @@ mod startup;
 mod tray;
 
 use tauri::{Emitter, Manager};
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(commands::TelemetryState::new())
         // This must be registered first so a second launch exits before any
         // other plugin can initialize another copy of the application.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -45,7 +48,10 @@ pub fn run() {
             commands::set_window_position
         ])
         .setup(|app| {
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            app.deep_link().register_all()?;
             tray::build_tray(app)?;
+            commands::start_widget_visibility_monitor(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

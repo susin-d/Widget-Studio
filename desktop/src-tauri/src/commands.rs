@@ -1,19 +1,77 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 use sysinfo::System;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder,
+};
 use tauri_plugin_autostart::ManagerExt;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+const SYSTEM_INFO_CACHE_TTL: Duration = Duration::from_secs(5);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SystemInfo {
     cpu_usage: f32,
     ram_used: u64,
     ram_total: u64,
     battery_level: Option<u8>,
+}
+
+pub struct TelemetryState {
+    cache: Mutex<TelemetryCache>,
+}
+
+struct TelemetryCache {
+    system: System,
+    cached: Option<(Instant, SystemInfo)>,
+}
+
+impl TelemetryState {
+    pub fn new() -> Self {
+        Self {
+            cache: Mutex::new(TelemetryCache {
+                system: System::new(),
+                cached: None,
+            }),
+        }
+    }
+
+    fn snapshot(&self) -> Result<SystemInfo, String> {
+        Ok(self
+            .cache
+            .lock()
+            .map_err(|_| "System telemetry cache is unavailable".to_string())?
+            .snapshot_at(Instant::now(), battery_level))
+    }
+}
+
+impl TelemetryCache {
+    fn snapshot_at<F>(&mut self, now: Instant, read_battery: F) -> SystemInfo
+    where
+        F: FnOnce() -> Option<u8>,
+    {
+        if let Some((sampled_at, info)) = &self.cached {
+            if now.saturating_duration_since(*sampled_at) < SYSTEM_INFO_CACHE_TTL {
+                return info.clone();
+            }
+        }
+
+        self.system.refresh_cpu_usage();
+        self.system.refresh_memory();
+        let info = SystemInfo {
+            cpu_usage: self.system.global_cpu_usage(),
+            ram_used: self.system.used_memory(),
+            ram_total: self.system.total_memory(),
+            battery_level: read_battery(),
+        };
+        self.cached = Some((now, info.clone()));
+        info
+    }
 }
 
 #[tauri::command]
@@ -22,8 +80,11 @@ pub fn save_layout(app: AppHandle, state: Value) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    fs::write(path, serde_json::to_vec_pretty(&state).map_err(|error| error.to_string())?)
-        .map_err(|error| error.to_string())
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&state).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -33,7 +94,9 @@ pub fn load_layout(app: AppHandle) -> Result<Option<Value>, String> {
         return Ok(None);
     }
     let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&raw).map(Some).map_err(|error| error.to_string())
+    serde_json::from_str(&raw)
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -47,35 +110,8 @@ pub fn set_startup(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_system_info() -> Result<SystemInfo, String> {
-    let mut system = System::new_all();
-    system.refresh_all();
-    let cpu_usage = system.global_cpu_usage();
-
-    // Query battery on Windows
-    let battery_level = if cfg!(target_os = "windows") {
-        let mut cmd = std::process::Command::new("powershell");
-        cmd.args(&["-Command", "(Get-CimInstance Win32_Battery).EstimatedChargeRemaining"]);
-        #[cfg(target_os = "windows")]
-        {
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        }
-        cmd.output()
-            .ok()
-            .and_then(|output| {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout.trim().parse::<u8>().ok()
-            })
-    } else {
-        None
-    };
-
-    Ok(SystemInfo {
-        cpu_usage,
-        ram_used: system.used_memory(),
-        ram_total: system.total_memory(),
-        battery_level,
-    })
+pub fn get_system_info(state: State<'_, TelemetryState>) -> Result<SystemInfo, String> {
+    state.snapshot()
 }
 
 #[tauri::command]
@@ -102,24 +138,39 @@ pub fn hide_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn set_always_on_top(app: AppHandle, enabled: bool) -> Result<(), String> {
-    main_window(&app)?.set_always_on_top(enabled).map_err(|error| error.to_string())
+    main_window(&app)?
+        .set_always_on_top(enabled)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn set_skip_taskbar(app: AppHandle, enabled: bool) -> Result<(), String> {
-    main_window(&app)?.set_skip_taskbar(enabled).map_err(|error| error.to_string())
+    main_window(&app)?
+        .set_skip_taskbar(enabled)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn set_desktop_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
     let window = main_window(&app)?;
-    window.set_always_on_top(false).map_err(|error| error.to_string())?;
-    window.set_skip_taskbar(enabled).map_err(|error| error.to_string())?;
-    window.set_decorations(!enabled).map_err(|error| error.to_string())?;
-    window.set_shadow(!enabled).map_err(|error| error.to_string())?;
+    window
+        .set_always_on_top(false)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_skip_taskbar(enabled)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_decorations(!enabled)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_shadow(!enabled)
+        .map_err(|error| error.to_string())?;
 
     if enabled {
-        if let Some(monitor) = window.current_monitor().map_err(|error| error.to_string())? {
+        if let Some(monitor) = window
+            .current_monitor()
+            .map_err(|error| error.to_string())?
+        {
             let position = monitor.position();
             let size = monitor.size();
             window
@@ -150,7 +201,10 @@ pub async fn open_widget_window(
             .set_position(PhysicalPosition::new(x as i32, y as i32))
             .map_err(|error| error.to_string())?;
         window
-            .set_size(PhysicalSize::new(width.max(1.0) as u32, height.max(1.0) as u32))
+            .set_size(PhysicalSize::new(
+                width.max(1.0) as u32,
+                height.max(1.0) as u32,
+            ))
             .map_err(|error| error.to_string())?;
         window.show().map_err(|error| error.to_string())?;
         window.set_focus().map_err(|error| error.to_string())?;
@@ -174,7 +228,7 @@ pub async fn open_widget_window(
     .inner_size(width.max(1.0), height.max(1.0))
     .build()
     .map(|window| {
-        keep_widget_visible(window);
+        let _ = window.set_minimizable(false);
     })
     .map_err(|error| error.to_string())
 }
@@ -190,7 +244,10 @@ pub fn close_widget_window(app: AppHandle, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_window_size(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
     main_window(&app)?
-        .set_size(PhysicalSize::new(width.max(320.0) as u32, height.max(240.0) as u32))
+        .set_size(PhysicalSize::new(
+            width.max(320.0) as u32,
+            height.max(240.0) as u32,
+        ))
         .map_err(|error| error.to_string())
 }
 
@@ -202,7 +259,8 @@ pub fn set_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), String>
 }
 
 fn main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
-    app.get_webview_window("main").ok_or_else(|| "Main window not found".to_string())
+    app.get_webview_window("main")
+        .ok_or_else(|| "Main window not found".to_string())
 }
 
 fn layout_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -212,23 +270,87 @@ fn layout_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| error.to_string())
 }
 
-fn keep_widget_visible(window: tauri::WebviewWindow) {
-    let _ = window.set_minimizable(false);
-
+pub fn start_widget_visibility_monitor(app: AppHandle) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(180));
+        std::thread::sleep(Duration::from_secs(1));
 
-        let Ok(minimized) = window.is_minimized() else {
-            break;
-        };
+        for (label, window) in app.webview_windows() {
+            if !label.starts_with("widget-") {
+                continue;
+            }
 
-        let Ok(visible) = window.is_visible() else {
-            break;
-        };
-
-        if minimized || !visible {
-            let _ = window.unminimize();
-            let _ = window.show();
+            let minimized = window.is_minimized().unwrap_or(false);
+            let visible = window.is_visible().unwrap_or(true);
+            if minimized || !visible {
+                let _ = window.unminimize();
+                let _ = window.show();
+            }
         }
     });
+}
+
+fn normalize_battery_level(battery_flag: u8, battery_percent: u8) -> Option<u8> {
+    const NO_SYSTEM_BATTERY: u8 = 0x80;
+    const UNKNOWN_PERCENT: u8 = u8::MAX;
+
+    if battery_flag & NO_SYSTEM_BATTERY != 0 || battery_percent == UNKNOWN_PERCENT {
+        None
+    } else {
+        Some(battery_percent.min(100))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn battery_level() -> Option<u8> {
+    use std::mem::MaybeUninit;
+    use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+
+    let mut status = MaybeUninit::<SYSTEM_POWER_STATUS>::zeroed();
+    if unsafe { GetSystemPowerStatus(status.as_mut_ptr()) } == 0 {
+        return None;
+    }
+
+    let status = unsafe { status.assume_init() };
+    normalize_battery_level(status.BatteryFlag, status.BatteryLifePercent)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn battery_level() -> Option<u8> {
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn normalizes_battery_status() {
+        assert_eq!(normalize_battery_level(0, 72), Some(72));
+        assert_eq!(normalize_battery_level(0, 140), Some(100));
+        assert_eq!(normalize_battery_level(0x80, 72), None);
+        assert_eq!(normalize_battery_level(0, u8::MAX), None);
+    }
+
+    #[test]
+    fn reuses_fresh_telemetry_snapshot() {
+        let reads = AtomicUsize::new(0);
+        let now = Instant::now();
+        let mut cache = TelemetryCache {
+            system: System::new(),
+            cached: None,
+        };
+
+        let first = cache.snapshot_at(now, || {
+            reads.fetch_add(1, Ordering::SeqCst);
+            Some(64)
+        });
+        let second = cache.snapshot_at(now + Duration::from_secs(1), || {
+            reads.fetch_add(1, Ordering::SeqCst);
+            Some(10)
+        });
+
+        assert_eq!(first, second);
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+    }
 }
