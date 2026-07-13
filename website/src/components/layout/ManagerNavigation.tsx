@@ -1,7 +1,7 @@
-import { Bell, Blocks, Cloud, Code2, Gauge, LayoutDashboard, Boxes, Bot, Palette, Search, Settings, Store } from "lucide-react";
+import { Bell, Blocks, Cloud, Code2, Gauge, LayoutDashboard, Boxes, Bot, Palette, Search, Settings, ShieldCheck, Store } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type ManagerView = "dashboard" | "widgets" | "marketplace" | "layouts" | "themes" | "automations" | "performance" | "plugins" | "sync" | "notifications" | "developer" | "settings";
+export type ManagerView = "dashboard" | "widgets" | "marketplace" | "layouts" | "themes" | "automations" | "performance" | "permissions" | "sync" | "notifications" | "developer" | "settings";
 
 const primary: Array<{ id: ManagerView; label: string; icon: ReactNode }> = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
@@ -16,7 +16,7 @@ const primary: Array<{ id: ManagerView; label: string; icon: ReactNode }> = [
 const secondary: Array<{ id: ManagerView; label: string; icon: ReactNode }> = [
   { id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
   { id: "sync", label: "Backup & sync", icon: <Cloud size={16} /> },
-  { id: "plugins", label: "Plugins", icon: <Code2 size={16} /> },
+  { id: "permissions", label: "Permissions", icon: <ShieldCheck size={16} /> },
   { id: "developer", label: "Dev tools", icon: <Code2 size={16} /> },
   { id: "settings", label: "Settings", icon: <Settings size={16} /> },
 ];

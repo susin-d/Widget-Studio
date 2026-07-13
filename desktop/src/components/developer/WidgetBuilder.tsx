@@ -5,6 +5,7 @@ import type { CustomWidgetDraft, CustomWidgetPermission, VisualBlock, VisualBloc
 import { CUSTOM_WIDGET_PERMISSIONS, createDefaultVisualDocument, createVisualBlock, customWidgetDataFromDraft, draftFromWidget, findVisualBlock, insertVisualBlock, moveVisualBlock, removeVisualBlock, updateVisualBlock } from "../../types/customWidget";
 import { renderVisualDocument, validateCustomWidgetSource } from "../../lib/customWidget";
 import { CustomWidgetRuntime } from "../widgets/CustomWidgetRuntime";
+import { CustomWidgetAgent } from "./CustomWidgetAgent";
 
 type BuilderTab = "guide" | "visual" | "code";
 
@@ -77,6 +78,7 @@ export function WidgetBuilder({ editingWidget, onPublish, onCancel }: WidgetBuil
       {([ ["guide", "Guide", <Sparkles size={14}/>], ["visual", "Visual builder", <Blocks size={14}/>], ["code", "Code", <Code2 size={14}/>] ] as const).map(([id, label, icon]) => <button key={id} onClick={() => id === "visual" ? enterVisualMode() : id === "code" ? enterCodeMode() : setTab("guide")} className={`builder-tab ${tab === id ? "active" : ""}`}>{icon}{label}{id === "code" && draft.mode === "code" ? <span className="builder-dot"/> : null}</button>)}
     </div>
     <label className="developer-field mb-4 max-w-xl"><span>Widget name</span><input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="My custom widget" /></label>
+    <CustomWidgetAgent draft={draft} onApply={(next) => { setDraft(next); setTab("code"); }} />
     {tab === "guide" && <GuidePanel onStartVisual={() => { setTab("visual"); enterVisualMode(); }} onStartCode={() => { setTab("code"); enterCodeMode(); }} />}
     {tab === "visual" && <div className="grid min-h-[530px] grid-cols-[210px_minmax(0,1fr)_270px] gap-3"><BlockLibrary onAdd={addBlock} document={draft.visual} selectedBlockId={selectedBlockId} onSelect={setSelectedBlockId} onMove={moveSelected} onDelete={deleteSelected} /><PreviewPanel name={draft.name} source={effectiveSource} permissions={draft.permissions} onPermissionsChange={(permissions) => setDraft((current) => ({ ...current, permissions }))} validation={validation} /><BlockInspector block={selectedBlock} onUpdate={updateSelected} /></div>}
     {tab === "code" && <div className="grid min-h-[530px] grid-cols-[minmax(0,1fr)_360px] gap-3"><CodeEditor source={draft.source} onChange={(source) => setDraft((current) => ({ ...current, mode: "code", source }))} /><PreviewPanel name={draft.name} source={effectiveSource} permissions={draft.permissions} onPermissionsChange={(permissions) => setDraft((current) => ({ ...current, permissions }))} validation={validation} /></div>}

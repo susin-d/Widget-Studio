@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, Cloud, Cpu, Download, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Plus, RotateCw, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Check, Cloud, Cpu, Download, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Plus, RotateCw, ShieldCheck, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ManagerView } from "./ManagerNavigation";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
@@ -7,6 +7,14 @@ import { nativeApi, type SystemInfo } from "../../lib/tauri";
 import { useAuthStore, BACKEND_URL } from "../../store/authStore";
 import { savePersistedState } from "../../lib/storage";
 import { WidgetBuilder } from "../developer/WidgetBuilder";
+import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidgetPermission } from "../../types/customWidget";
+
+const permissionInfo: Record<CustomWidgetPermission, { label: string; description: string }> = {
+  network: { label: "Network access", description: "Connect to HTTPS APIs and external services." },
+  clipboard: { label: "Clipboard", description: "Copy text to the system clipboard." },
+  notifications: { label: "Notifications", description: "Send desktop notifications." },
+  openExternal: { label: "Open external links", description: "Open approved HTTP(S) links in your browser." }
+};
 
 
 
@@ -445,13 +453,13 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
     );
   }
 
-  if (view === "plugins") {
+  if (view === "permissions") {
     return (
-      <Page title="Plugin Manager" subtitle="Manage sandboxed widget API scopes and security tokens.">
+      <Page title="Permissions" subtitle="Choose what each custom widget can access in its sandbox.">
         <div className="content-panel max-w-2xl text-sm space-y-3">
           <div className="flex items-center justify-between border-b border-black/5 pb-2 dark:border-white/5">
-            <b>Sandboxed Capabilities</b>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300">4 APIs enabled</span>
+            <b>Permission center</b>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300">Default · off</span>
           </div>
           <div className="space-y-2">
             {[["Network Request (HTTPS)", "Allows widgets to reach external API forecast services."],
@@ -463,10 +471,12 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
                   <b className="text-xs block">{name}</b>
                   <p className="text-[11px] text-muted">{desc}</p>
                 </div>
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Active</span>
+                <span className="text-xs font-semibold text-muted">Controlled below</span>
               </div>
             ))}
           </div>
+          {widgets.map((widget) => { const custom = widget.type === "custom"; const permissions = custom ? normalizeCustomWidgetData(widget.data).permissions : {}; return <section className="content-panel p-0" key={widget.id}><div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5"><div><b className="block truncate">{widget.name}</b><span className="text-[11px] text-muted">{custom ? "Custom widget · sandboxed" : "Built-in widget · trusted"}</span></div><span className="text-[11px] font-semibold text-emerald-500">{custom ? `${CUSTOM_WIDGET_PERMISSIONS.filter((permission) => permissions[permission]).length} allowed` : "Trusted"}</span></div>{custom ? <div className="divide-y divide-black/5 px-4 dark:divide-white/5">{CUSTOM_WIDGET_PERMISSIONS.map((permission) => <label className="flex cursor-pointer items-center justify-between gap-4 py-3" key={permission}><div><b className="block text-xs">{permissionInfo[permission].label}</b><span className="text-[11px] text-muted">{permissionInfo[permission].description}</span></div><input type="checkbox" checked={Boolean(permissions[permission])} onChange={(event) => onSetWidgets(widgets.map((item) => item.id === widget.id ? { ...item, data: { ...item.data, permissions: { ...permissions, [permission]: event.target.checked } } } : item))} className="h-5 w-5 accent-accent" /></label>)}</div> : <div className="px-4 py-3 text-xs text-muted">This widget has no special external permissions.</div>}</section>; })}
+          {widgets.length === 0 && <div className="content-panel text-sm text-muted">No widgets installed yet.</div>}
         </div>
       </Page>
     );

@@ -268,7 +268,7 @@ pub fn copy_to_clipboard(text: String) -> Result<(), String> {
         const CF_UNICODETEXT: u32 = 13;
         let utf16: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
-            if OpenClipboard(0) == 0 { return Err("Windows clipboard is unavailable".into()); }
+            if OpenClipboard(std::ptr::null_mut()) == 0 { return Err("Windows clipboard is unavailable".into()); }
             EmptyClipboard();
             let bytes = utf16.len() * std::mem::size_of::<u16>();
             let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
