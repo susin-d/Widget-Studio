@@ -24,7 +24,10 @@ export const nativeApi = {
   close: () => getCurrentWindow().close(),
   saveLayout: (state: PersistedState) => callTauri<void>("save_layout", { state }),
   loadLayout: () => callTauri<PersistedState | null>("load_layout"),
-  setStartup: (enabled: boolean) => callTauri<void>("set_startup", { enabled }),
+  // Startup registration is a native-only capability. Keep the browser preview
+  // usable while still applying the setting in the local/web state store.
+  setStartup: (enabled: boolean) =>
+    isTauri ? callTauri<void>("set_startup", { enabled }) : Promise.resolve(),
   getSystemInfo: () => callTauri<SystemInfo>("get_system_info"),
   showWindow: () => callTauri<void>("show_window"),
   hideWindow: () => callTauri<void>("hide_window"),
