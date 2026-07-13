@@ -1,106 +1,48 @@
-import { Download, ShieldCheck, Check, Layers, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Download, ExternalLink, FileDown, Laptop, ShieldCheck, Sparkles, Timer, WifiOff } from "lucide-react";
+
+interface InstallerMetadata {
+  version: string;
+  fileName: string;
+  downloadUrl: string;
+}
+
+const defaultInstaller: InstallerMetadata = { version: "0.1.0", fileName: "WidgetStudioInstaller.msi", downloadUrl: "/WidgetStudioInstaller.msi" };
 
 export function DownloadPage() {
   const [downloading, setDownloading] = useState(false);
+  const [installer, setInstaller] = useState<InstallerMetadata>(defaultInstaller);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/installer.json", { signal: controller.signal, cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<Partial<InstallerMetadata>> : null)
+      .then((metadata) => {
+        if (!metadata?.version || !metadata.fileName || !metadata.downloadUrl) return;
+        setInstaller({ version: metadata.version, fileName: metadata.fileName, downloadUrl: metadata.downloadUrl });
+      }).catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   const triggerDownload = () => {
     setDownloading(true);
-    // Trigger download of mock installer file
     const link = document.createElement("a");
-    link.href = "/WidgetStudioInstaller.msi";
-    link.download = "WidgetStudioInstaller.msi";
+    link.href = installer.downloadUrl;
+    link.download = installer.fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    setTimeout(() => {
-      setDownloading(false);
-    }, 2000);
+    window.setTimeout(() => setDownloading(false), 2200);
   };
 
-  const steps = [
-    { num: "01", title: "Download Installer", desc: "Get the lightweight Windows MSI package. Tested clean of malware." },
-    { num: "02", title: "Launch setup wizard", desc: "Double click the installer. Follow the simple wizard setup screens." },
-    { num: "03", title: "Pin & Sync Layouts", desc: "Launch the client. Sign in to pull your canvas from the database." }
-  ];
-
   return (
-    <div className="bg-[#090a0f] text-white min-h-screen py-16 px-6 relative flex items-center justify-center">
-      {/* Background Radial Glow */}
-      <div className="absolute top-1/4 left-1/3 w-[300px] h-[300px] rounded-full bg-indigo-600/10 blur-[130px] pointer-events-none" />
+    <div className="marketing-page page-with-top-space">
+      <div className="site-noise" aria-hidden="true" />
+      <div className="site-container download-hero"><div className="download-copy"><div className="eyebrow"><Laptop size={14} /> The native Widget Studio experience</div><h1>Your desktop,<br /><em>in its element.</em></h1><p>Bring your canvas out of the browser and onto the Windows desktop. Keep your focus timer, notes, links, and layout one glance away.</p><div className="download-points"><span><Check size={15} /> Windows 10 & 11 · x64</span><span><Check size={15} /> Lightweight native client</span><span><Check size={15} /> Works offline, syncs when you return</span></div></div><div className="installer-card"><div className="installer-card-top"><div className="installer-icon"><Download size={23} /></div><span className="installer-status"><i /> ready to install</span></div><div><span className="card-overline">Latest stable build</span><h2>Widget Studio for Windows</h2><p>Version {installer.version} · MSI installer · x64</p></div><button type="button" onClick={triggerDownload} className="site-button site-button-primary site-button-large installer-button">{downloading ? <><Timer size={17} className="spin-slow" /> Starting download…</> : <><FileDown size={17} /> Download installer <ArrowRight size={16} /></>}</button><div className="installer-meta"><span><ShieldCheck size={13} /> signed package</span><span>~ 48 MB</span></div></div></div>
 
-      <div className="max-w-4xl w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-        {/* Left column info */}
-        <div className="space-y-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 font-medium">
-            <ShieldCheck size={13} />
-            Verified Safe Installer (MSI)
-          </div>
+      <section className="site-container install-guide"><div className="section-heading-row"><div><div className="eyebrow">Three quiet steps</div><h2>From download to done.</h2></div><p>No account is required to try the desktop client. Sign in when you want your layout to travel with you.</p></div><div className="install-steps"><article><span>01</span><div><h3>Download the MSI</h3><p>Save the installer and open it when you are ready. Windows handles the rest.</p></div></article><article><span>02</span><div><h3>Choose your setup</h3><p>Pick a start-on-boot preference, then launch your first workspace.</p></div></article><article><span>03</span><div><h3>Place the useful things</h3><p>Pin widgets to the desktop and let the layout become part of your rhythm.</p></div></article></div></section>
 
-          <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
-            Install the Desktop{" "}
-            <span className="bg-gradient-to-r from-indigo-400 to-[#ff4f87] bg-clip-text text-transparent">
-              Client
-            </span>
-          </h1>
-
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Get the full native overlay experience. Unlike browser tabs, the desktop client overlays directly onto your Windows wallpaper, supports hotkeys (Ctrl+W), and launches on system startup automatically.
-          </p>
-
-          <div className="space-y-3.5 pt-2">
-            {[
-              "Windows 10 / 11 Desktop (x64 architecture)",
-              "Tauri-native WebView runtime automatically integrated",
-              "Less than 50MB disk space required for installer",
-              "Zero spyware or background resource telemetry logs"
-            ].map((spec) => (
-              <div key={spec} className="flex gap-2.5 text-xs text-slate-300">
-                <Check size={14} className="text-indigo-400 shrink-0 mt-0.5" />
-                <span>{spec}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right column downloader */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 shadow-2xl backdrop-blur-xl relative space-y-8">
-          <div className="text-center space-y-4">
-            <div className="h-14 w-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
-              <Download size={24} className={downloading ? "animate-bounce" : ""} />
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-bold">Widget Studio Setup</h3>
-              <p className="text-[11px] text-slate-500 mt-1">Version 0.1.0 · Windows Installer (x64)</p>
-            </div>
-
-            <button
-              onClick={triggerDownload}
-              className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white py-3 text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition"
-            >
-              {downloading ? "Starting Download..." : "Download Installer (.msi)"}
-            </button>
-          </div>
-
-          {/* Setup steps */}
-          <div className="space-y-4 pt-4 border-t border-white/5">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Installation Walkthrough</h4>
-            <div className="space-y-3">
-              {steps.map((s) => (
-                <div key={s.num} className="flex gap-3 text-xs">
-                  <span className="font-mono text-indigo-400 font-bold shrink-0 mt-0.5">{s.num}</span>
-                  <div>
-                    <h5 className="font-bold text-slate-200">{s.title}</h5>
-                    <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{s.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <section className="site-container download-details"><div className="detail-card"><WifiOff size={18} /><div><h3>Works without a connection</h3><p>Your local layout stays available offline. Sync resumes when you are back online.</p></div></div><div className="detail-card"><Sparkles size={18} /><div><h3>Made to stay out of the way</h3><p>Native overlays, gentle materials, and a small footprint keep the desktop feeling like yours.</p></div></div><a className="detail-card detail-card-link" href="/WidgetStudioInstaller.msi" target="_blank" rel="noreferrer"><ExternalLink size={18} /><div><h3>Prefer a direct link?</h3><p>Open the current installer package in a new tab.</p></div><ArrowRight size={15} /></a></section>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
 import { Button } from "../ui/Button";
 
-const gallery: Array<{ type: WidgetKind; label: string; icon: ReactNode }> = [
+export const widgetGallery: Array<{ type: WidgetKind; label: string; icon: ReactNode }> = [
   { type: "clock", label: "Clock", icon: <Clock size={16} /> },
   { type: "weather", label: "Weather", icon: <CloudSun size={16} /> },
   { type: "todo", label: "Todo", icon: <CheckSquare size={16} /> },
@@ -58,7 +58,7 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
       {/* Widget Library — compact grid */}
       <div className="px-3 pt-3 pb-2">
         <div className="space-y-1">
-          {gallery.map((item) => (
+          {widgetGallery.map((item) => (
             <button
               key={item.type}
               onClick={() => {

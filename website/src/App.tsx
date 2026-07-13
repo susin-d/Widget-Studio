@@ -280,11 +280,13 @@ export default function App() {
     );
   }
 
+  const isStudioRoute = currentRoute === "dashboard";
+
   return (
-    <div className="flex flex-col min-h-screen bg-[#090a0f] text-white">
+    <div className={isStudioRoute ? "dashboard-root flex flex-col min-h-screen bg-[#090a0f] text-white" : "site-root"}>
       <WebHeader />
       
-      <main className="flex-1">
+      <main className={isStudioRoute ? "flex-1" : "site-main"}>
         {currentRoute === "landing" && <LandingPage />}
         {currentRoute === "features" && <FeaturesPage />}
         {currentRoute === "auth" && <AuthPage />}
@@ -376,7 +378,7 @@ export default function App() {
         )}
       </main>
       
-      <WebFooter />
+      {!isStudioRoute && <WebFooter />}
       {searchOpen && <CommandPalette onClose={()=>setSearchOpen(false)} onView={setManagerView} onCreate={()=>{const w=createWidget("clock",widgets.length);setWidgets([...widgets,w]);setSelectedWidgetId(w.id);setManagerView("widgets")}} />}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>

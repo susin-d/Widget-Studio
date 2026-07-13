@@ -1,108 +1,35 @@
-import { Sparkles, Cpu, Lock, Shield, Layers, HelpCircle, ArrowRight } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Cloud, Code2, Cpu, Focus, Layers3, LockKeyhole, MousePointer2, NotebookPen, Palette, ShieldCheck, Sparkles, TimerReset, Zap } from "lucide-react";
 import { useRouteStore } from "../../store/routeStore";
+
+const widgets = [
+  { icon: Focus, name: "Focus timer", description: "A simple rhythm for deep work, right where you can see it.", tone: "violet" },
+  { icon: NotebookPen, name: "Sticky notes", description: "Catch the thought before it disappears. Keep it close until it is done.", tone: "coral" },
+  { icon: CalendarDays, name: "Calendar", description: "See the shape of your day without opening another app.", tone: "gold" },
+  { icon: Zap, name: "Quick links", description: "Your everyday destinations, one click away from the desktop.", tone: "blue" },
+  { icon: Cpu, name: "System monitor", description: "A quiet glance at what your machine is carrying right now.", tone: "mint" },
+  { icon: TimerReset, name: "Pomodoro", description: "Flexible intervals for momentum, rest, and getting back in.", tone: "rose" },
+  { icon: Layers3, name: "Mindmap", description: "Turn a loose idea into something you can move around.", tone: "indigo" },
+  { icon: MousePointer2, name: "Custom widgets", description: "Build your own with HTML, CSS, and JavaScript in a safe sandbox.", tone: "orange" },
+];
 
 export function FeaturesPage() {
   const { setRoute } = useRouteStore();
 
-  const widgetsList = [
-    { name: "Clock & World Clock", desc: "Local time and multi-timezone trackers with customizable timezone listings." },
-    { name: "System Monitor", desc: "Real-time updates of CPU and RAM memory usage percentages with near-zero memory footprint." },
-    { name: "Focus Timer (Pomodoro)", desc: "Build workspace habits. Includes customizable intervals, active loops, and status states." },
-    { name: "Mindmap Widget", desc: "Organize brainstorming nodes. Interactive drag nodes and customizable tree hierarchies." },
-    { name: "Sticky Notepad", desc: "Scribble reminders instantly. Multi-colored grid cells and autosave state backups." },
-    { name: "Weather Widget", desc: "Forecast API lookups. Display local temperature and weather report overlays." },
-    { name: "Calculator", desc: "Evaluate formulas directly from the desktop canvas with history panels." },
-    { name: "Todo & Calendar", desc: "Interactive task checkboxes, task filtering, and a standard calendar grid checker." },
-  ];
-
   return (
-    <div className="bg-[#090a0f] text-white min-h-screen py-16 px-6 relative">
-      {/* Background Radial Glow */}
-      <div className="absolute top-0 right-1/4 w-[350px] h-[350px] rounded-full bg-purple-600/10 blur-[130px] pointer-events-none" />
+    <div className="marketing-page page-with-top-space">
+      <div className="site-noise" aria-hidden="true" />
+      <div className="site-container page-intro"><div className="eyebrow"><Sparkles size={14} /> Everything has a place</div><h1>The tools you reach for,<br /><em>already within reach.</em></h1><p>Widget Studio is deliberately small in all the right ways: fast to open, easy to shape, and focused on the details that help a day feel less scattered.</p></div>
 
-      <div className="max-w-5xl mx-auto space-y-16">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">
-            Explore the{" "}
-            <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              Features
-            </span>
-          </h1>
-          <p className="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">
-            13+ built-in widgets, robust custom styles, and deep system integrations engineered to work flawlessly.
-          </p>
-        </div>
+      <section className="site-container capability-grid">
+        <article className="capability-card capability-card-wide"><div className="capability-card-icon"><Palette size={20} /></div><div><span className="card-overline">Shape the surface</span><h2>Build a workspace<br />that looks like yours.</h2><p>Choose a color story, tune the glass, and place each widget where your attention naturally lands.</p></div><div className="mini-palette"><span /><span /><span /><span /><span /></div></article>
+        <article className="capability-card"><div className="capability-card-icon violet"><Cloud size={20} /></div><span className="card-overline">Keep the thread</span><h2>Sync without<br />thinking about it.</h2><p>Cloud layout sync keeps your positions, styles, and widget data ready wherever you sign in.</p><div className="capability-stat"><strong>1</strong><span>canvas<br />everywhere</span></div></article>
+        <article className="capability-card"><div className="capability-card-icon gold"><Code2 size={20} /></div><span className="card-overline">Go a little further</span><h2>Make your own<br />small tools.</h2><p>Custom widgets run in an isolated sandbox, so the canvas can grow with your workflow.</p><div className="code-lines\"><span>&lt;Widget name=&quot;ritual&quot; /&gt;</span><span>&lt;keep it useful /&gt;</span></div></article>
+        <article className="capability-card capability-card-wide capability-card-dark"><div className="capability-card-icon mint"><ShieldCheck size={20} /></div><div><span className="card-overline">Native when it matters</span><h2>From browser canvas<br />to wallpaper overlay.</h2><p>Use the web editor to shape your layout. Install the Windows client when you want widgets pinned to the desktop.</p></div><div className="native-badge"><LockKeyhole size={14} /> Windows native</div></article>
+      </section>
 
-        {/* Technical Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 space-y-4 shadow-xl">
-            <div className="h-10 w-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-              <Cpu size={20} />
-            </div>
-            <h3 className="font-bold text-lg">Rust-Powered Engine</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Tauri uses the native webview of the OS. The desktop client runs with negligible overhead, using less than 15MB RAM idle.
-            </p>
-          </div>
+      <section className="site-container widget-catalog-section"><div className="section-heading-row"><div><div className="eyebrow">The built-in set</div><h2>Start with something useful.</h2></div><p>Eight ways to make the desktop do a little more for you, without making it feel busier.</p></div><div className="widget-catalog">{widgets.map(({ icon: Icon, name, description, tone }, index) => <article className="catalog-card" key={name}><div className={"catalog-icon " + tone}><Icon size={18} /></div><div><span className="catalog-index">0{index + 1}</span><h3>{name}</h3><p>{description}</p></div></article>)}</div></section>
 
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 space-y-4 shadow-xl">
-            <div className="h-10 w-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Lock size={20} />
-            </div>
-            <h3 className="font-bold text-lg">PostgreSQL Cloud Sync</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Every coordinate shift, style change, and todo checkbox is securely pushed to our backend database and synced automatically.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 space-y-4 shadow-xl">
-            <div className="h-10 w-10 rounded-lg bg-[#ff4f87]/10 border border-[#ff4f87]/30 flex items-center justify-center text-[#ff4f87]">
-              <Shield size={20} />
-            </div>
-            <h3 className="font-bold text-lg">Sandboxed Sandbox</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Create custom HTML/CSS/JS widgets safely. Sensitive APIs like clipboard and notifications prompt you for approval first.
-            </p>
-          </div>
-        </div>
-
-        {/* Built-in Widgets Showcase */}
-        <div className="space-y-8">
-          <h2 className="text-2xl font-bold text-center">Built-in Desktop Widgets</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {widgetsList.map((w) => (
-              <div key={w.name} className="rounded-xl border border-white/5 bg-white/[0.01] p-5 hover:bg-white/[0.03] transition-all duration-200">
-                <h4 className="font-semibold text-slate-200 text-sm mb-1.5">{w.name}</h4>
-                <p className="text-[11px] text-slate-400 leading-relaxed">{w.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Call to action */}
-        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-8 text-center max-w-3xl mx-auto space-y-4">
-          <Sparkles className="mx-auto text-indigo-400" size={32} />
-          <h3 className="text-xl font-bold">Ready to design your desktop?</h3>
-          <p className="text-xs text-slate-400 leading-relaxed max-w-md mx-auto">
-            Get started with our browser workspace layout canvas preview or install the desktop application.
-          </p>
-          <div className="flex justify-center gap-3 pt-2">
-            <button
-              onClick={() => setRoute("dashboard")}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 text-xs font-semibold shadow-md transition"
-            >
-              Open Web Canvas
-            </button>
-            <button
-              onClick={() => setRoute("download")}
-              className="flex items-center gap-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 px-5 py-2.5 text-xs font-semibold border border-white/10 transition"
-            >
-              Download App
-            </button>
-          </div>
-        </div>
-      </div>
+      <section className="site-container promise-section"><div className="promise-mark"><Check size={20} /></div><div><div className="eyebrow">The promise</div><h2>Your attention is the product.</h2><p>Every decision in Widget Studio is meant to make the next useful action easier to find—not to keep you inside an app.</p></div><button type="button" className="site-button site-button-primary" onClick={() => setRoute("download")}>Get started <ArrowRight size={15} /></button></section>
     </div>
   );
 }

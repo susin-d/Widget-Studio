@@ -139,6 +139,16 @@ npm install
 npm run tauri:dev
 ```
 
+### 4. Build and Publish the Windows Installer to the Website
+
+From the repository root, build the MSI and refresh the installer asset and release metadata consumed by the website:
+
+```powershell
+.\scripts\build-msi-and-update-site.ps1
+```
+
+The script builds the MSI from `desktop/`, copies the verified artifact to `website/public/WidgetStudioInstaller.msi`, writes `website/public/installer.json` with the version, size, and SHA-256, and runs the website production build. Use `-SkipWebsiteBuild` when only the public asset and metadata need to be refreshed. The existing Vercel website project will deploy these committed changes on its normal deployment workflow.
+
 ---
 
 ## ☁️ Deploying Website and API as Separate Vercel Projects

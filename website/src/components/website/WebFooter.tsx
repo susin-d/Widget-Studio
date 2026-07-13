@@ -1,76 +1,42 @@
-import { Heart } from "lucide-react";
+import { ArrowUpRight, Github, Heart } from "lucide-react";
 import { useRouteStore } from "../../store/routeStore";
 
 export function WebFooter() {
-  const { setRoute } = useRouteStore();
+  const { setRoute, setAuthViewMode } = useRouteStore();
+  const go = (route: "landing" | "features" | "download" | "faq") => setRoute(route);
 
   return (
-    <footer className="w-full bg-[#07080d] border-t border-white/5 py-12 px-8 text-slate-400 text-xs">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-        {/* Branding */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            <img src="/widget-studio-logo.png" alt="Widget Studio" className="h-6 w-6 rounded-md" />
-            <span className="font-semibold text-white tracking-wider text-sm">WIDGET STUDIO</span>
-          </div>
-          <p className="text-slate-500 leading-relaxed">
-            Beautiful glassmorphic widgets for your Windows desktop. Create, customize, and sync layouts instantly.
-          </p>
+    <footer className="site-footer">
+      <div className="site-footer-inner">
+        <div className="site-footer-lead">
+          <button type="button" onClick={() => go("landing")} className="site-brand site-brand-footer" aria-label="Widget Studio home">
+            <img src="/widget-studio-logo.png" alt="" className="site-brand-mark" />
+            <span className="site-brand-copy"><strong>Widget Studio</strong><small>your desktop, composed</small></span>
+          </button>
+          <p>A small, thoughtful layer for the screen you already spend your day in.</p>
         </div>
-
-        {/* Links */}
-        <div>
-          <h4 className="text-white font-bold tracking-wider mb-3">PRODUCT</h4>
-          <ul className="space-y-2">
-            <li>
-              <button onClick={() => setRoute("landing")} className="hover:text-white transition">Home</button>
-            </li>
-            <li>
-              <button onClick={() => setRoute("features")} className="hover:text-white transition">Features</button>
-            </li>
-            <li>
-              <button onClick={() => setRoute("download")} className="hover:text-white transition">Downloads</button>
-            </li>
-          </ul>
+        <div className="site-footer-column">
+          <span className="site-footer-label">Product</span>
+          <button type="button" onClick={() => go("features")}>Features</button>
+          <button type="button" onClick={() => go("download")}>Download</button>
+          <button type="button" onClick={() => { setAuthViewMode("signup"); setRoute("auth"); }}>Create an account</button>
         </div>
-
-        {/* Support */}
-        <div>
-          <h4 className="text-white font-bold tracking-wider mb-3">RESOURCES</h4>
-          <ul className="space-y-2">
-            <li>
-              <button onClick={() => setRoute("faq")} className="hover:text-white transition">FAQ & Support</button>
-            </li>
-            <li>
-              <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-white transition">GitHub Repo</a>
-            </li>
-            <li>
-              <button onClick={() => setRoute("dashboard")} className="hover:text-white transition">Web Canvas</button>
-            </li>
-          </ul>
+        <div className="site-footer-column">
+          <span className="site-footer-label">Explore</span>
+          <button type="button" onClick={() => go("faq")}>FAQ & support</button>
+          <button type="button" onClick={() => setRoute("dashboard")}>Open web canvas</button>
+          <a href="https://github.com" target="_blank" rel="noreferrer"><Github size={14} /> GitHub</a>
         </div>
-
-        {/* Badges */}
-        <div className="space-y-3">
-          <h4 className="text-white font-bold tracking-wider mb-1">SYSTEM BADGE</h4>
-          <div className="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 py-2 w-max">
-            <span className="text-lg">🪟</span>
-            <div>
-              <b className="text-white block text-[11px]">Windows 11</b>
-              <span className="text-[9px] text-slate-500">Fully Compatible</span>
-            </div>
-          </div>
-          <div className="text-[10px] text-slate-600">Built using Tauri, Vite, and Rust.</div>
+        <div className="site-footer-card">
+          <span className="site-footer-label">Made for the everyday</span>
+          <strong>Windows 10 / 11</strong>
+          <span>Native overlays · cloud sync · no noise</span>
+          <button type="button" onClick={() => go("download")} className="site-footer-card-link">Get the client <ArrowUpRight size={14} /></button>
         </div>
       </div>
-
-      <div className="max-w-6xl mx-auto mt-12 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-slate-600">
-        <div>&copy; {new Date().getFullYear()} Widget Studio. All rights reserved.</div>
-        <div className="flex items-center gap-1.5 mt-2 sm:mt-0">
-          <span>Made with</span>
-          <Heart size={10} className="text-indigo-500 fill-indigo-500" />
-          <span>for desktop productivity.</span>
-        </div>
+      <div className="site-footer-bottom">
+        <span>© {new Date().getFullYear()} Widget Studio</span>
+        <span className="site-footer-made">Made with <Heart size={12} /> for focused work.</span>
       </div>
     </footer>
   );

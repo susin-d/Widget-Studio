@@ -21,6 +21,8 @@ const secondary: Array<{ id: ManagerView; label: string; icon: ReactNode }> = [
   { id: "settings", label: "Settings", icon: <Settings size={16} /> },
 ];
 
+export const managerNavigationItems = [...primary, ...secondary];
+
 export function ManagerNavigation({ view, onView, onSearch }: { view: ManagerView; onView: (view: ManagerView) => void; onSearch: () => void }) {
   return (
     <aside className="manager-nav studio-panel flex w-52 shrink-0 flex-col">
@@ -28,11 +30,12 @@ export function ManagerNavigation({ view, onView, onSearch }: { view: ManagerVie
       <div className="px-3 pt-3 pb-2">
         <button
           onClick={onSearch}
+          aria-label="Search workspace"
           className="flex w-full items-center gap-2 rounded-lg border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.06] px-3 py-2 text-xs text-muted transition hover:bg-black/[0.06] dark:hover:bg-white/[0.1]"
         >
           <Search size={13} />
-          <span>Search</span>
-          <kbd className="ml-auto rounded bg-black/6 px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          <span>Search workspace</span>
+          <kbd className="ml-auto rounded bg-black/6 px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
         </button>
       </div>
 

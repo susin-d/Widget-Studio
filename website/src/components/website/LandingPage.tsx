@@ -1,226 +1,108 @@
-import { useState, useEffect } from "react";
-import { Sparkles, Download, LayoutGrid, Clock, Clipboard, Flame, HelpCircle, Check, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Clock3, Command, Download, Focus, LayoutGrid, LockKeyhole, MousePointer2, NotebookPen, Sparkles, Zap } from "lucide-react";
 import { useRouteStore } from "../../store/routeStore";
 
+function formatTime(seconds: number) {
+  return String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+}
+
+function WindowBar({ label }: { label: string }) {
+  return (
+    <div className="preview-window-bar">
+      <div className="preview-window-dots"><span /><span /><span /></div>
+      <span>{label}</span>
+      <span className="preview-window-live"><i /> syncing</span>
+    </div>
+  );
+}
+
 export function LandingPage() {
-  const { setRoute, setAuthViewMode } = useRouteStore();
-
-  // Mini Notepad state
-  const [note, setNote] = useState("✨ Welcome to Widget Studio! You can edit this sticky note directly on the landing page.");
-  
-  // Pomodoro state
-  const [seconds, setSeconds] = useState(1500);
-  const [isRunning, setIsRunning] = useState(false);
-  const mode = "focus";
-
-  useEffect(() => {
-    let interval: any = null;
-    if (isRunning && seconds > 0) {
-      interval = setInterval(() => setSeconds((s) => s - 1), 1000);
-    } else if (seconds === 0) {
-      setIsRunning(false);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning, seconds]);
-
-  const toggleTimer = () => setIsRunning(!isRunning);
-  const resetTimer = () => {
-    setIsRunning(false);
-    setSeconds(1500);
-  };
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
-
-  // Clock state
+  const { setRoute } = useRouteStore();
+  const [seconds, setSeconds] = useState(24 * 60 + 18);
+  const [timerRunning, setTimerRunning] = useState(false);
   const [time, setTime] = useState(new Date());
+
   useEffect(() => {
-    const id = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(id);
+    const clockId = window.setInterval(() => setTime(new Date()), 1000);
+    return () => window.clearInterval(clockId);
   }, []);
 
+  useEffect(() => {
+    if (!timerRunning) return;
+    const timerId = window.setInterval(() => setSeconds((value) => value > 0 ? value - 1 : 24 * 60 + 18), 1000);
+    return () => window.clearInterval(timerId);
+  }, [timerRunning]);
+
   return (
-    <div className="bg-[#090a0f] text-white min-h-screen overflow-x-hidden">
-      {/* Background Radial Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] pointer-events-none opacity-30 select-none">
-        <div className="absolute top-[-10%] left-[20%] w-[350px] h-[350px] rounded-full bg-indigo-600 blur-[130px]" />
-        <div className="absolute top-[10%] right-[20%] w-[400px] h-[400px] rounded-full bg-[#ff4f87] blur-[150px]" />
-      </div>
+    <div className="marketing-page">
+      <div className="site-noise" aria-hidden="true" />
+      <div className="site-orb site-orb-one" aria-hidden="true" />
+      <div className="site-orb site-orb-two" aria-hidden="true" />
 
-      {/* Hero Section */}
-      <section className="relative max-w-6xl mx-auto pt-20 pb-16 px-6 text-center space-y-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-indigo-300 font-medium">
-          <Sparkles size={12} className="animate-pulse" />
-          Introducing Widget Studio v0.1.0 for Windows
+      <section className="site-container hero-section">
+        <div className="hero-copy">
+          <div className="eyebrow"><Sparkles size={14} /> A calmer place for the work between the work</div>
+          <h1>Put the useful things <em>where you can see them.</em></h1>
+          <p className="hero-subtitle">Widget Studio turns your Windows desktop into a quiet command center for focus, context, and the small details that keep a day moving.</p>
+          <div className="hero-actions">
+            <button type="button" className="site-button site-button-primary site-button-large" onClick={() => setRoute("download")}><Download size={17} /> Download for Windows <ArrowRight size={16} /></button>
+            <button type="button" className="site-button site-button-secondary site-button-large" onClick={() => setRoute("dashboard")}><LayoutGrid size={17} /> Try the web canvas</button>
+          </div>
+          <div className="hero-proof"><span><Check size={14} /> 13+ built-in widgets</span><span><Check size={14} /> syncs across devices</span><span><Check size={14} /> Windows native</span></div>
         </div>
 
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto">
-          Your Desktop Workspace,{" "}
-          <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-[#ff4f87] bg-clip-text text-transparent">
-            Reimagined
-          </span>
-        </h1>
-
-        <p className="text-slate-400 text-sm md:text-lg max-w-2xl mx-auto leading-relaxed">
-          Create, customize, and overlay interactive acrylic glass widgets on your Windows 11 desktop. Sync layouts across devices in real-time.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <button
-            onClick={() => setRoute("download")}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3.5 text-sm font-semibold shadow-lg shadow-indigo-600/30 border border-indigo-500/20 transition-all hover:translate-y-[-1px]"
-          >
-            <Download size={16} />
-            Download Installer
-          </button>
-          <button
-            onClick={() => setRoute("dashboard")}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 px-8 py-3.5 text-sm font-semibold border border-white/10 transition-all"
-          >
-            <LayoutGrid size={16} />
-            Launch Web Dashboard
-          </button>
+        <div className="hero-visual" aria-label="Preview of a Widget Studio desktop workspace">
+          <div className="hero-visual-glow" />
+          <div className="workspace-preview">
+            <WindowBar label="morning workspace" />
+            <div className="workspace-preview-body">
+              <div className="preview-sidebar">
+                <div className="preview-sidebar-brand"><img src="/widget-studio-logo.png" alt="" /><span>Studio</span></div>
+                <span className="preview-sidebar-section">Library</span>
+                {[[Clock3, "Clock"], [Focus, "Focus"], [NotebookPen, "Notes"], [Zap, "Quick links"]].map(([Icon, label]) => {
+                  const WidgetIcon = Icon as typeof Clock3;
+                  return <div className="preview-sidebar-item" key={label as string}><WidgetIcon size={13} /><span>{label as string}</span></div>;
+                })}
+                <div className="preview-sidebar-footer"><LockKeyhole size={12} /> private layout</div>
+              </div>
+              <div className="preview-canvas">
+                <div className="preview-canvas-top"><span>Canvas</span><span className="preview-toolbar"><Command size={11} /> K</span></div>
+                <div className="preview-widget preview-widget-clock">
+                  <div className="preview-widget-head"><span><Clock3 size={12} /> local time</span><i /></div>
+                  <strong>{time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong>
+                  <small>{time.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}</small>
+                </div>
+                <div className="preview-widget preview-widget-focus">
+                  <div className="preview-widget-head"><span><Focus size={12} /> focus session</span><b>in progress</b></div>
+                  <strong>{formatTime(seconds)}</strong>
+                  <div className="preview-progress"><span style={{ width: Math.max(8, (seconds / (25 * 60)) * 100) + "%" }} /></div>
+                  <button type="button" onClick={() => setTimerRunning((running) => !running)}>{timerRunning ? "Pause" : "Start focus"}</button>
+                </div>
+                <div className="preview-widget preview-widget-note"><div className="preview-widget-head"><span><NotebookPen size={12} /> today</span><MousePointer2 size={12} /></div><p>Write the brief.<br />Ship the thing.<br />Leave room to think.</p></div>
+                <div className="preview-widget preview-widget-tasks"><div className="preview-widget-head"><span>next up</span><span>3 items</span></div><p><i className="task-check is-done"><Check size={9} /></i> Review launch notes</p><p><i className="task-check" /> Tidy the canvas</p><p><i className="task-check" /> Take a real break</p></div>
+                <div className="preview-selection"><span>selected</span><i /><i /><i /><i /></div>
+              </div>
+            </div>
+          </div>
+          <span className="hero-visual-caption"><span className="caption-line" /> A little order, right on the desktop.</span>
         </div>
       </section>
 
-      {/* Interactive Sandbox Showcase */}
-      <section className="max-w-6xl mx-auto py-12 px-6">
-        <div className="text-center space-y-3 mb-12">
-          <h2 className="text-2xl md:text-3xl font-bold">Interactive Sandbox</h2>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">
-            Test some of our most popular widgets live right here on the webpage.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {/* Clock Widget */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 flex flex-col justify-between shadow-2xl min-h-[200px]">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                <Clock size={13} className="text-indigo-400" />
-                Live Clock
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            </div>
-            <div className="py-6 text-center">
-              <div className="text-3xl md:text-4xl font-bold tracking-widest font-mono text-slate-100">
-                {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </div>
-              <div className="text-xs text-slate-400 mt-2 font-medium">
-                {time.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}
-              </div>
-            </div>
-            <div className="text-[10px] text-slate-500 text-center">Standard local timezone synced</div>
-          </div>
-
-          {/* Sticky Notepad Widget */}
-          <div className="rounded-2xl border border-white/10 bg-amber-500/10 backdrop-blur-xl p-5 flex flex-col justify-between shadow-2xl min-h-[200px] border-amber-500/20">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                <Clipboard size={13} />
-                Sticky Note
-              </span>
-              <span className="text-[9px] font-semibold text-amber-500/80">Editable</span>
-            </div>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="w-full flex-1 bg-transparent text-amber-100/90 text-xs py-3 outline-none resize-none placeholder-amber-200/50"
-            />
-            <div className="text-[10px] text-amber-400/60 text-center">Changes save temporarily</div>
-          </div>
-
-          {/* Focus Timer Widget */}
-          <div className="rounded-2xl border border-white/10 bg-rose-500/10 backdrop-blur-xl p-5 flex flex-col justify-between shadow-2xl min-h-[200px] border-rose-500/20">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <span className="text-xs font-semibold text-rose-300 flex items-center gap-1.5">
-                <Flame size={13} />
-                Focus Timer
-              </span>
-              <span className="text-[9px] font-semibold text-rose-400">{mode.toUpperCase()}</span>
-            </div>
-            <div className="py-4 text-center">
-              <div className="text-3xl md:text-4xl font-bold font-mono text-rose-100">{formatTime(seconds)}</div>
-              <div className="flex justify-center gap-2 mt-3">
-                <button
-                  onClick={toggleTimer}
-                  className="rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 px-3 py-1 text-xs font-medium transition"
-                >
-                  {isRunning ? "Pause" : "Start"}
-                </button>
-                <button
-                  onClick={resetTimer}
-                  className="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1 text-xs font-medium transition"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-            <div className="text-[10px] text-rose-400/60 text-center">Pomodoro method built-in</div>
-          </div>
+      <section className="site-container signal-section">
+        <div className="section-kicker">Built for the way a day actually moves</div>
+        <div className="signal-grid">
+          <article className="signal-card signal-card-featured"><div className="signal-icon"><Focus size={18} /></div><h2>Stay in the flow.</h2><p>Keep a timer, a note, and the next right thing close without adding another tab to your life.</p><span className="signal-number">01</span></article>
+          <article className="signal-card"><div className="signal-icon warm"><LayoutGrid size={18} /></div><h2>Make it yours.</h2><p>Arrange, resize, recolor, and build a workspace that feels like it belongs to you.</p><span className="signal-number">02</span></article>
+          <article className="signal-card"><div className="signal-icon cool"><LockKeyhole size={18} /></div><h2>Take it with you.</h2><p>Sign in once and your layout follows you from the browser canvas to the native client.</p><span className="signal-number">03</span></article>
         </div>
       </section>
 
-      {/* Feature Grid Banner */}
-      <section className="max-w-6xl mx-auto py-16 px-6 border-t border-white/5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div className="space-y-6 text-left">
-            <h3 className="text-3xl font-extrabold">Crafted for Windows Desktop Integration</h3>
-            <p className="text-slate-400 leading-relaxed text-sm">
-              Widget Studio uses Rust-powered Tauri to overlay widgets with near-zero memory footprint. Snap coordinates to a grid, configure automations like Battery Saver mode, or write custom sandboxed JavaScript widgets!
-            </p>
-            <ul className="space-y-3.5">
-              {[
-                "13+ built-in widgets (Notes, Weather, Calendar, Todo, System)",
-                "Full acrylic blur, custom opacity, and border radius dials",
-                "Cloud backup and real-time syncing via PostgreSQL backend",
-                "Dev tools to create and sandbox custom HTML widgets"
-              ].map((text) => (
-                <li key={text} className="flex items-start gap-2.5 text-xs text-slate-300">
-                  <Check size={14} className="text-indigo-400 shrink-0 mt-0.5" />
-                  <span>{text}</span>
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setRoute("features")}
-              className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 text-sm font-semibold pt-2"
-            >
-              See all features
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          <div className="relative group rounded-2xl overflow-hidden border border-white/10 bg-white/5 p-6 shadow-2xl">
-            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-transparent to-[#ff4f87]/5 pointer-events-none" />
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-rose-500" />
-                <span className="w-3 h-3 rounded-full bg-amber-500" />
-                <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-[10px] text-slate-500 font-mono ml-2">layout_sync.json</span>
-              </div>
-              <pre className="text-[11px] font-mono text-indigo-300 bg-black/40 rounded-xl p-4 overflow-x-auto leading-relaxed border border-white/5">
-{`{
-  "user_id": "83fb4b3e-e612-4cf0-8cfd-b2a65dcfd2f0",
-  "settings": {
-    "theme": "dark",
-    "colorTheme": "berry-pop",
-    "cornerRadius": 18
-  },
-  "widgets": [
-    { "type": "clock", "rect": { "x": 32, "y": 96 } },
-    { "type": "todo", "data": { "items": [] } }
-  ]
-}`}
-              </pre>
-            </div>
-          </div>
-        </div>
+      <section className="site-container story-section">
+        <div className="story-art"><div className="story-art-grid" /><div className="story-stack"><span>focus</span><span>context</span><span>clarity</span></div><div className="story-art-note"><span>small things,<br /><strong>well placed.</strong></span><ArrowRight size={19} /></div></div>
+        <div className="story-copy"><div className="eyebrow">A desktop with a point of view</div><h2>Less dashboard.<br /><em>More daily rhythm.</em></h2><p>Widget Studio is made for the spaces between big tasks: checking the time, collecting a thought, remembering what comes next. It gives those moments a home without asking you to leave the work.</p><div className="story-list"><span><Check size={15} /> Arrange your view around your attention</span><span><Check size={15} /> Use native overlays when you need them</span><span><Check size={15} /> Keep your data synced and close</span></div><button type="button" className="inline-link" onClick={() => setRoute("features")}>See how it works <ArrowRight size={15} /></button></div>
       </section>
+
+      <section className="site-container cta-section"><div><div className="eyebrow"><Sparkles size={14} /> Your next screen can feel better</div><h2>Make room for the things<br /><em>that make work work.</em></h2></div><div className="cta-actions\"><button type="button" className="site-button site-button-primary site-button-large" onClick={() => setRoute("download")}>Get Widget Studio <ArrowRight size={16} /></button><button type="button" className="inline-link" onClick={() => setRoute("faq")}>Questions? Start here <ArrowRight size={15} /></button></div></section>
     </div>
   );
 }

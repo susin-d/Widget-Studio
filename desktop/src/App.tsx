@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { AppWindow, EyeOff, Grid3X3, Moon, Pin, Redo2, RotateCcw, Search, Undo2 } from "lucide-react";
+import { AppWindow, EyeOff, Grid3X3, Moon, Pin, Redo2, RotateCcw, Undo2 } from "lucide-react";
 import { loadPersistedState, resetCloudSyncCursor, savePersistedState } from "./lib/storage";
 import { nativeApi } from "./lib/tauri";
 import { useSettingsStore } from "./store/settingsStore";
@@ -10,6 +10,7 @@ import { WidgetGallery } from "./components/layout/WidgetGallery";
 import { WidgetFrame } from "./components/layout/WidgetFrame";
 import { WidgetInspector } from "./components/layout/WidgetInspector";
 import { ManagerNavigation, type ManagerView } from "./components/layout/ManagerNavigation";
+import { CommandPalette } from "./components/layout/CommandPalette";
 import { ManagerPage } from "./components/layout/ManagerPages";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { Button } from "./components/ui/Button";
@@ -17,7 +18,7 @@ import { hexToRgb } from "./lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay } from "./lib/widgetActions";
 
 import { useAuthStore } from "./store/authStore";
-import type { PersistedState } from "./types/widget";
+import type { PersistedState, WidgetKind } from "./types/widget";
 
 export default function App() {
   const widgetWindowId = new URLSearchParams(window.location.search).get("widget");
@@ -57,6 +58,24 @@ export default function App() {
   const sessionSource = useAuthStore((state) => state.sessionSource);
   const initialStateLoaded = useRef(false);
   const handledSessionVersion = useRef(0);
+
+  const handleManagerViewChange = useCallback((view: ManagerView) => {
+    if (view === "developer") setDeveloperWidgetId(null);
+    setManagerView(view);
+  }, []);
+
+  const addWidgetFromPalette = useCallback((type: WidgetKind) => {
+    const widget = addWidget(type);
+    setSelectedWidgetId(widget.id);
+    setSelectedWidgetIds([widget.id]);
+    setManagerView("widgets");
+  }, [addWidget]);
+
+  const openWidgetFromPalette = useCallback((id: string) => {
+    setSelectedWidgetId(id);
+    setSelectedWidgetIds([id]);
+    setManagerView("widgets");
+  }, []);
 
   const applyLoadedState = useCallback((state: PersistedState) => {
     const restoredSettings = state.version < 2 ? { ...state.settings, launchOnStartup: true } : state.settings;
@@ -277,7 +296,7 @@ export default function App() {
         <div className="ml-auto flex items-center gap-1"><button className="title-action" onClick={() => void nativeApi.minimize()}>—</button><button className="title-action" onClick={() => void nativeApi.toggleMaximize()}><AppWindow size={14} /></button><button className="title-action close" onClick={() => void nativeApi.close()}>×</button></div>
       </header>
       <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
-      <ManagerNavigation view={managerView} onView={(view) => { if (view === "developer") setDeveloperWidgetId(null); setManagerView(view); }} onSearch={() => setSearchOpen(true)} />
+      <ManagerNavigation view={managerView} onView={handleManagerViewChange} onSearch={() => setSearchOpen(true)} />
       {managerView !== "widgets" ? <ManagerPage view={managerView} widgets={widgets} onSetWidgets={setWidgets} editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null} onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }} onOpenWidgets={() => setManagerView("widgets")} /> : <>
       <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onSettings={() => setManagerView("settings")} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
       <section
@@ -339,7 +358,13 @@ export default function App() {
       <WidgetInspector widget={selectedWidget} onSelectWidget={setSelectedWidgetId} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
       </>}
       </div>
-      {searchOpen && <CommandPalette onClose={()=>setSearchOpen(false)} onView={setManagerView} onCreate={()=>{const w=createWidget("clock",widgets.length);setWidgets([...widgets,w]);setSelectedWidgetId(w.id);setManagerView("widgets")}} />}
+      {searchOpen && <CommandPalette
+        widgets={widgets}
+        onClose={() => setSearchOpen(false)}
+        onView={handleManagerViewChange}
+        onCreateWidget={addWidgetFromPalette}
+        onOpenWidget={openWidgetFromPalette}
+      />}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {errorToast && (
         <div className="fixed bottom-16 right-6 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-red-500 bg-red-50 p-4 text-xs font-medium text-red-800 shadow-win dark:bg-red-950/90 dark:text-red-200">
@@ -349,9 +374,4 @@ export default function App() {
       )}
     </main>
   );
-}
-
-function CommandPalette({onClose,onView,onCreate}:{onClose:()=>void;onView:(v:ManagerView)=>void;onCreate:()=>void}) {
- const [query,setQuery]=useState(""); const actions=[{label:"Create new widget",run:onCreate},{label:"Open Theme Studio",run:()=>onView("themes")},{label:"Open Marketplace",run:()=>onView("marketplace")},{label:"Open Desktop Layouts",run:()=>onView("layouts")},{label:"Open Performance",run:()=>onView("performance")}].filter(x=>x.label.toLowerCase().includes(query.toLowerCase()));
- return <div className="command-backdrop" onPointerDown={onClose}><div className="command-palette" onPointerDown={e=>e.stopPropagation()}><div className="flex items-center gap-3 border-b border-black/10 px-4"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} autoFocus placeholder="Search widgets, layouts, themes and actions…"/><kbd>Esc</kbd></div>{actions.map(x=><button key={x.label} onClick={()=>{x.run();onClose()}}>{x.label}<span>Action</span></button>)}</div></div>
 }
