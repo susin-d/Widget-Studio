@@ -37,5 +37,8 @@ export const nativeApi = {
   setWindowSize: (width: number, height: number) => callTauri<void>("set_window_size", { width, height }),
   setWindowPosition: (x: number, y: number) => callTauri<void>("set_window_position", { x, y }),
   copyToClipboard: (text: string) => callTauri<void>("copy_to_clipboard", { text }),
-  openUninstallSettings: () => callTauri<void>("open_uninstall_settings")
+  openUninstallSettings: () => callTauri<void>("open_uninstall_settings"),
+  getOpenaiApiKey: () => callTauri<string | null>("get_openai_api_key"),
+  setOpenaiApiKey: (apiKey: string) => callTauri<void>("set_openai_api_key", { apiKey }),
+  deleteOpenaiApiKey: () => callTauri<void>("delete_openai_api_key")
 };

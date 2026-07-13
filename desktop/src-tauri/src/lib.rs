@@ -51,7 +51,10 @@ pub fn run() {
             commands::set_window_size,
             commands::set_window_position,
             commands::open_uninstall_settings,
-            commands::copy_to_clipboard
+            commands::copy_to_clipboard,
+            commands::get_openai_api_key,
+            commands::set_openai_api_key,
+            commands::delete_openai_api_key
         ])
         .setup(|app| {
             #[cfg(any(target_os = "windows", target_os = "linux"))]

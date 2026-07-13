@@ -19,6 +19,109 @@ const MAIN_WINDOW_MIN_HEIGHT: f64 = 240.0;
 const WIDGET_WINDOW_MIN_SIZE: f64 = 1.0;
 const TEMPORARY_TOPMOST_DURATION: Duration = Duration::from_millis(700);
 const VISIBILITY_MONITOR_INTERVAL: Duration = Duration::from_secs(1);
+const OPENAI_CREDENTIAL_TARGET: &str = "Widget Studio/OpenAI API Key";
+
+#[tauri::command]
+pub fn get_openai_api_key() -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::ptr;
+        use windows_sys::Win32::Security::Credentials::{
+            CredFree, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
+        };
+
+        let target = wide_string(OPENAI_CREDENTIAL_TARGET);
+        let mut credential: *mut CREDENTIALW = ptr::null_mut();
+        let read = unsafe { CredReadW(target.as_ptr(), CRED_TYPE_GENERIC, 0, &mut credential) };
+        if read == 0 {
+            return Ok(None);
+        }
+
+        let value = unsafe {
+            let entry = &*credential;
+            let bytes =
+                std::slice::from_raw_parts(entry.CredentialBlob, entry.CredentialBlobSize as usize);
+            String::from_utf8(bytes.to_vec())
+                .map_err(|_| "The stored OpenAI API key is not valid UTF-8.".to_string())
+        };
+        unsafe { CredFree(credential as *const _ as *mut _) };
+        return value.map(Some);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("OpenAI API key storage is only supported on Windows.".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn set_openai_api_key(api_key: String) -> Result<(), String> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return delete_openai_api_key();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Security::Credentials::{
+            CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
+        };
+
+        let target = wide_string(OPENAI_CREDENTIAL_TARGET);
+        let mut credential = CREDENTIALW {
+            Flags: 0,
+            Type: CRED_TYPE_GENERIC,
+            TargetName: target.as_ptr() as *mut u16,
+            Comment: std::ptr::null_mut(),
+            LastWritten: unsafe { std::mem::zeroed() },
+            CredentialBlobSize: api_key.len() as u32,
+            CredentialBlob: api_key.as_ptr() as *mut u8,
+            Persist: CRED_PERSIST_LOCAL_MACHINE,
+            AttributeCount: 0,
+            Attributes: std::ptr::null_mut(),
+            TargetAlias: std::ptr::null_mut(),
+            UserName: std::ptr::null_mut(),
+        };
+        let written = unsafe { CredWriteW(&mut credential, 0) };
+        if written == 0 {
+            return Err(
+                "Windows Credential Manager could not save the OpenAI API key.".to_string(),
+            );
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = api_key;
+        Err("OpenAI API key storage is only supported on Windows.".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn delete_openai_api_key() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Security::Credentials::{CredDeleteW, CRED_TYPE_GENERIC};
+
+        let target = wide_string(OPENAI_CREDENTIAL_TARGET);
+        let deleted = unsafe { CredDeleteW(target.as_ptr(), CRED_TYPE_GENERIC, 0) };
+        if deleted == 0 {
+            // Missing credentials are already in the desired state.
+            return Ok(());
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("OpenAI API key storage is only supported on Windows.".to_string())
+    }
+}
+
+fn wide_string(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SystemInfo {

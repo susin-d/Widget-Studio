@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import type { DesktopWidget } from "../../types/widget";
 import { useWidgetStore } from "../../store/widgetStore";
-import { useAuthStore, BACKEND_URL } from "../../store/authStore";
 import { executeWidgetCommand } from "../../lib/widgetAgent";
+import { completeDesktopChat } from "../../lib/aiClient";
 import { Send, Trash2, Bot, Sparkles, Smile, Code } from "lucide-react";
 
 interface Message {
@@ -105,75 +105,49 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
       return;
     }
 
-    const token = useAuthStore.getState().token;
-    if (token) {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/chatbot/chat`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            messages: nextMessages.map(m => ({ role: m.role, text: m.text })),
-            persona: currentPersona,
-            reasoning_effort: reasoningEffort
-          })
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          const aiMessage: Message = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            text: data.reply
-          };
-          updateWidget(widget.id, {
-            data: {
-              ...widget.data,
-              messages: [...nextMessages, aiMessage]
-            }
-          });
-          setIsTyping(false);
-          return;
-        }
-      } catch (err) {
-        console.warn("Backend chat failed, falling back to local simulation", err);
-      }
+    const lower = userMessage.text.toLowerCase();
+    let localResponse: string | null = null;
+    if (lower.includes("time") || lower.includes("clock")) {
+      localResponse = `The current local time is ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. Check out the Clock widget for a live update!`;
+    } else if (lower.includes("weather")) {
+      localResponse = "The weather is currently offline-safe and ambient, but it is always sunny inside Widget Studio!";
+    } else if (lower.includes("date") || lower.includes("calendar")) {
+      localResponse = `Today is ${new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Check the Calendar widget to plan ahead!`;
     }
-
-    // Local fallback is intentionally limited. Widget commands above work
-    // offline; general knowledge needs an authenticated backend AI session.
-    setTimeout(() => {
-      let responseText = "";
-      const lower = userMessage.text.toLowerCase();
-
-      if (lower.includes("time") || lower.includes("clock")) {
-        responseText = `The current local time is ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. Check out the Clock widget for a live update!`;
-      } else if (lower.includes("weather")) {
-        responseText = "The weather is currently offline-safe and ambient, but it is always sunny inside Widget Studio!";
-      } else if (lower.includes("date") || lower.includes("calendar")) {
-        responseText = `Today is ${new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Check the Calendar widget to plan ahead!`;
-      } else if (!token) {
-        responseText = "I can edit your widgets offline, but general questions need the AI backend. Sign in to Widget Studio and try again.";
-      } else {
-        responseText = "I couldn't reach the AI backend just now. Please check your connection and try again.";
-      }
-
-      const aiMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        text: responseText
-      };
-
+    if (localResponse) {
       updateWidget(widget.id, {
         data: {
           ...widget.data,
-          messages: [...nextMessages, aiMessage]
+          messages: [...nextMessages, { id: crypto.randomUUID(), role: "assistant", text: localResponse }]
         }
       });
       setIsTyping(false);
-    }, 1000);
+      return;
+    }
+
+    try {
+      const reply = await completeDesktopChat(
+        nextMessages.map((message) => ({ role: message.role, text: message.text })),
+        currentPersona,
+        reasoningEffort,
+      );
+      updateWidget(widget.id, {
+        data: {
+          ...widget.data,
+          messages: [...nextMessages, { id: crypto.randomUUID(), role: "assistant", text: reply }]
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The AI provider request failed. Check Settings > AI Provider.";
+      updateWidget(widget.id, {
+        data: {
+          ...widget.data,
+          messages: [...nextMessages, { id: crypto.randomUUID(), role: "assistant", text: message }]
+        }
+      });
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleClear = () => {

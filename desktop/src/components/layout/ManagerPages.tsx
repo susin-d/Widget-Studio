@@ -11,6 +11,7 @@ import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidget
 import { isTauri, nativeApi } from "../../lib/tauri";
 import { createWidget, useWidgetStore } from "../../store/widgetStore";
 import { executeWidgetCommand } from "../../lib/widgetAgent";
+import { AiProviderSection } from "../settings/AiProviderSection";
 
 
 
@@ -528,6 +529,7 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
               <span>Lock all widget coordinates</span>
             </label>
           </div>
+          <AiProviderSection />
           <div className="flex items-center justify-between gap-4 border-t border-black/10 pt-4 dark:border-white/10">
             <div>
               <b className="block text-sm">Uninstall Widget Studio</b>

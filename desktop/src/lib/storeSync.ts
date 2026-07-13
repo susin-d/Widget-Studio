@@ -3,6 +3,7 @@ import { isTauri } from "./tauri";
 import { useWidgetStore } from "../store/widgetStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useAuthStore } from "../store/authStore";
+import { useAiProviderStore, type AiProviderSettings } from "../store/aiProviderStore";
 import type { DesktopWidget, AppSettings } from "../types/widget";
 
 let isSyncingWidgets = false;
@@ -44,6 +45,10 @@ export function initializeStoreSync() {
         auth.logout();
       }
     }).then(() => emit("auth-session-request")).catch(() => undefined);
+
+    void listen<AiProviderSettings>("ai-provider-settings-sync", (event) => {
+      useAiProviderStore.getState().syncSettings(event.payload);
+    }).then(() => emit("ai-provider-settings-request")).catch(() => undefined);
   } else {
     void listen("auth-session-request", () => {
       const auth = useAuthStore.getState();
@@ -56,6 +61,29 @@ export function initializeStoreSync() {
       if (state.sessionVersion === previousSessionVersion) return;
       previousSessionVersion = state.sessionVersion;
       void emit("auth-session-sync", { token: state.token, email: state.email }).catch(() => undefined);
+    });
+
+    void listen("ai-provider-settings-request", () => {
+      void emit("ai-provider-settings-sync", {
+        baseUrl: useAiProviderStore.getState().baseUrl,
+        model: useAiProviderStore.getState().model,
+        maxTokens: useAiProviderStore.getState().maxTokens,
+        temperature: useAiProviderStore.getState().temperature,
+        timeoutSeconds: useAiProviderStore.getState().timeoutSeconds,
+      }).catch(() => undefined);
+    });
+
+    let previousAiSettings = useAiProviderStore.getState();
+    useAiProviderStore.subscribe((state) => {
+      if (state.baseUrl === previousAiSettings.baseUrl && state.model === previousAiSettings.model && state.maxTokens === previousAiSettings.maxTokens && state.temperature === previousAiSettings.temperature && state.timeoutSeconds === previousAiSettings.timeoutSeconds) return;
+      previousAiSettings = state;
+      void emit("ai-provider-settings-sync", {
+        baseUrl: state.baseUrl,
+        model: state.model,
+        maxTokens: state.maxTokens,
+        temperature: state.temperature,
+        timeoutSeconds: state.timeoutSeconds,
+      }).catch(() => undefined);
     });
   }
 

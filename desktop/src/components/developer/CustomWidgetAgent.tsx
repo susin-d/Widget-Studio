@@ -3,7 +3,7 @@ import { Bot, LoaderCircle, WandSparkles } from "lucide-react";
 import type { CustomWidgetDraft, VisualWidgetDocument } from "../../types/customWidget";
 import { createDefaultVisualDocument } from "../../types/customWidget";
 import { validateCustomWidgetSource } from "../../lib/customWidget";
-import { BACKEND_URL, useAuthStore } from "../../store/authStore";
+import { completeDesktopChat } from "../../lib/aiClient";
 
 interface WidgetAgentProps {
   draft: CustomWidgetDraft;
@@ -35,30 +35,14 @@ export function CustomWidgetAgent({ draft, onApply }: WidgetAgentProps) {
   const generate = async () => {
     const prompt = brief.trim();
     if (!prompt || busy) return;
-    const token = useAuthStore.getState().token;
-    if (!token) {
-      setMessage("Sign in to use the Custom Widget Agent.");
-      return;
-    }
-
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(`${BACKEND_URL}/api/chatbot/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          persona: "coder",
-          reasoning_effort: "high",
-          messages: [
-            { role: "user", text: SYSTEM_INSTRUCTIONS },
-            { role: "user", text: `Create this widget: ${prompt}` }
-          ]
-        })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.detail ?? "The widget agent request failed.");
-      const parsed = parseAgentJson(payload.reply);
+      const reply = await completeDesktopChat([
+        { role: "user", text: SYSTEM_INSTRUCTIONS },
+        { role: "user", text: `Create this widget: ${prompt}` }
+      ], "coder", "high");
+      const parsed = parseAgentJson(reply);
       const source = {
         html: String(parsed.html ?? ""),
         css: String(parsed.css ?? ""),
