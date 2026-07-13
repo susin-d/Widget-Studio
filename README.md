@@ -24,16 +24,16 @@ widget/
 
 ```mermaid
 flowchart TD
-    subgraph Native Client (desktop)
+    subgraph "Native Client (desktop)"
         Tauri[Tauri v2 / Rust Host] <--> ReactDesktop[React App / Zustand]
         ReactDesktop <--> LocalStorage[Local layout.json]
     end
 
-    subgraph Web Client (website)
+    subgraph "Web Client (website)"
         ReactWeb[React App / Zustand] <--> BrowserStorage[localStorage fallback]
     end
 
-    subgraph Backend Server (server)
+    subgraph "Backend Server (server)"
         FastAPI[FastAPI API] <--> PG[(PostgreSQL Database)]
     end
 
@@ -189,7 +189,7 @@ $env:DATABASE_URL="postgresql://<user>:<password>@<host>/<database>"
 python -m server.init_db
 ```
 
-The API health check is available at `https://<api-domain>/api/health`. Add the API callback URL to Google Cloud OAuth, and use the website callback URL as the web redirect target.
+The API health check is available at `https://<api-domain>/` (also `/health` and `/api/health`). Add the API callback URL to Google Cloud OAuth, and use the website callback URL as the web redirect target.
 
 ---
 

@@ -43,6 +43,8 @@ app.add_middleware(
 )
 
 
+@app.get("/", include_in_schema=False)
+@app.get("/health", include_in_schema=False)
 @app.get("/api/health", include_in_schema=False)
 def health_check():
     return {"status": "ok"}
