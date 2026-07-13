@@ -260,7 +260,8 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
             <script>
                 window.onload = function() {{
                     setTimeout(function() {{
-                        window.location.href = "{redirect_url}";
+                        window.location.replace("{redirect_url}");
+                        setTimeout(function(){{ window.close(); }}, 700);
                     }}, 500);
                 }}
             </script>

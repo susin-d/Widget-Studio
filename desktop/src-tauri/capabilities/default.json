@@ -9,6 +9,9 @@
     "core:window:allow-set-size",
     "core:window:allow-set-position",
     "shell:default",
-    "autostart:default"
+    "deep-link:default",
+    "autostart:default",
+    "process:default",
+    "updater:default"
   ]
 }

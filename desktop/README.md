@@ -45,12 +45,22 @@ npm run tauri:dev
 npm run build
 ```
 
+TypeScript and Vite reuse build data from the repository-level `.cache/` directory. Native release builds also use Cargo incremental compilation, and the GitHub release workflow restores both the frontend cache and `desktop/src-tauri/target` between runs.
+
 ### 5. Compile Native Windows Executable
 To package the desktop app as an MSI / NSIS installer:
 
 ```powershell
 npm run tauri:build
 ```
+
+For a release that can be installed by the in-app updater, provide the Tauri signing key through `TAURI_SIGNING_PRIVATE_KEY` or `TAURI_SIGNING_PRIVATE_KEY_PATH`, set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (use an explicit empty value for a passwordless key), and run:
+
+```powershell
+npm run tauri:build:release
+```
+
+The release workflow publishes the signed NSIS artifact and `latest.json` to GitHub Releases. The updater checks that feed on application startup and installs updates after the user confirms.
 
 ## Project Structure
 

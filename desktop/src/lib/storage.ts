@@ -1,5 +1,6 @@
 import type { AppSettings, PersistedState } from "../types/widget";
 import { nativeApi, isTauri } from "./tauri";
+import { useAuthStore, BACKEND_URL } from "../store/authStore";
 
 const STORAGE_KEY = "desktop-widgets-state";
 let lastCloudUpdatedAt: string | null = null;
@@ -32,8 +33,6 @@ export const emptyState = (): PersistedState => ({
 export function resetCloudSyncCursor(): void {
   lastCloudUpdatedAt = null;
 }
-
-import { useAuthStore, BACKEND_URL } from "../store/authStore";
 
 export async function loadPersistedState(): Promise<PersistedState> {
   // Try loading from local storage first as a starting point
@@ -89,10 +88,13 @@ export async function loadPersistedState(): Promise<PersistedState> {
 }
 
 export async function savePersistedState(state: PersistedState): Promise<boolean> {
+  const localSaveSucceeded = await saveLocalPersistedState(state);
+  const cloudSaveSucceeded = await syncPersistedStateToCloud(state);
+  return localSaveSucceeded && cloudSaveSucceeded;
+}
+
+export async function saveLocalPersistedState(state: PersistedState): Promise<boolean> {
   const safeState = sanitize(state);
-  let localSaveSucceeded = true;
-  
-  // 1. Save locally instantly
   try {
     if (isTauri) {
       await nativeApi.saveLayout(safeState);
@@ -101,12 +103,17 @@ export async function savePersistedState(state: PersistedState): Promise<boolean
     }
   } catch (err) {
     console.error("Local save failed", err);
-    localSaveSucceeded = false;
+    return false;
   }
 
-  // 2. Sync to cloud if user is logged in
+  return true;
+}
+
+export async function syncPersistedStateToCloud(state: PersistedState): Promise<boolean> {
+  const safeState = sanitize(state);
+
   const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();
-  if (!token) return localSaveSucceeded;
+  if (!token) return true;
 
   try {
     setSyncStatus("syncing");
@@ -127,7 +134,7 @@ export async function savePersistedState(state: PersistedState): Promise<boolean
       lastCloudUpdatedAt = typeof savedState.updated_at === "string" ? savedState.updated_at : lastCloudUpdatedAt;
       setSyncStatus("synced");
       setLastSyncedAt(new Date().toLocaleTimeString());
-      return localSaveSucceeded;
+      return true;
     } else if (res.status === 401) {
       resetCloudSyncCursor();
       logout();

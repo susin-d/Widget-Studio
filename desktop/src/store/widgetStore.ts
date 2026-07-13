@@ -38,7 +38,14 @@ interface WidgetStore {
   syncWidgets: (widgets: DesktopWidget[]) => void;
 }
 
-const history=(state:WidgetStore,next:DesktopWidget[])=>({widgets:next,past:[...state.past.slice(-49),structuredClone(state.widgets)],future:[]});
+// Widget updates are immutable, so history can retain the previous array by reference.
+// This preserves undo/redo while avoiding a full structured clone on every keystroke,
+// drag, resize, timer tick, or widget data update.
+const history = (state: WidgetStore, next: DesktopWidget[]) => ({
+  widgets: next,
+  past: [...state.past.slice(-49), state.widgets],
+  future: []
+});
 
 export const defaultWidgetSettings = (): WidgetSettings => ({
   opacity: 0.86,
@@ -146,6 +153,7 @@ export const useWidgetStore = create<WidgetStore>((set, get) => ({
       const dy = rect.y !== undefined ? rect.y - target.rect.y : 0;
       const dw = rect.width !== undefined ? rect.width - target.rect.width : 0;
       const dh = rect.height !== undefined ? rect.height - target.rect.height : 0;
+      if (dx === 0 && dy === 0 && dw === 0 && dh === 0) return state;
 
       const nextWidgets = state.widgets.map((widget) => {
         const inGroup = groupWidgets.some(gw => gw.id === widget.id);
@@ -193,8 +201,24 @@ export const useWidgetStore = create<WidgetStore>((set, get) => ({
           groupIds.includes(widget.id) ? { ...widget, settings: { ...widget.settings, ...settings } } : widget
         ));
     }),
-  undo:()=>set(state=>{const previous=state.past[state.past.length-1];if(!previous)return state;return{widgets:structuredClone(previous),past:state.past.slice(0,-1),future:[structuredClone(state.widgets),...state.future].slice(0,50)}}),
-  redo:()=>set(state=>{const next=state.future[0];if(!next)return state;return{widgets:structuredClone(next),past:[...state.past,structuredClone(state.widgets)].slice(-50),future:state.future.slice(1)}}),
+  undo: () => set((state) => {
+    const previous = state.past[state.past.length - 1];
+    if (!previous) return state;
+    return {
+      widgets: previous,
+      past: state.past.slice(0, -1),
+      future: [state.widgets, ...state.future].slice(0, 50)
+    };
+  }),
+  redo: () => set((state) => {
+    const next = state.future[0];
+    if (!next) return state;
+    return {
+      widgets: next,
+      past: [...state.past, state.widgets].slice(-50),
+      future: state.future.slice(1)
+    };
+  }),
   syncWidgets: (widgets) => set({ widgets })
 }));
 

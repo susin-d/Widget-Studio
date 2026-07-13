@@ -1,6 +1,6 @@
 import { motion, useDragControls } from "framer-motion";
 import { Check, Copy, EyeOff, GripHorizontal, Lock, Pin, Trash2, Unlock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { DesktopWidget, ThemeMode, WidgetBackground } from "../../types/widget";
@@ -24,15 +24,29 @@ import { ChatbotWidget } from "../widgets/ChatbotWidget";
 import { hexToRgb } from "../../lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay, toggleWidgetLock, deleteWidget } from "../../lib/widgetActions";
 
-export function WidgetFrame({ widget, overlay = false, selected = false, onSelect }: { widget: DesktopWidget; overlay?: boolean; selected?: boolean; onSelect?: (additive: boolean) => void }) {
-  if (widget.hidden && !overlay) return null;
+interface WidgetFrameProps {
+  widget: DesktopWidget;
+  overlay?: boolean;
+  selected?: boolean;
+  onSelect?: (additive: boolean) => void;
+}
+
+function WidgetFrameComponent({ widget, overlay = false, selected = false, onSelect }: WidgetFrameProps) {
   const frameRef = useRef<HTMLElement | null>(null);
-  const appSettings = useSettingsStore((state) => state.settings);
+  const lockPositions = useSettingsStore((state) => state.settings.lockPositions);
+  const desktopMode = useSettingsStore((state) => state.settings.desktopMode);
+  const snapToGrid = useSettingsStore((state) => state.settings.snapToGrid);
+  const blurIntensity = useSettingsStore((state) => state.settings.blurIntensity);
+  const shadowIntensity = useSettingsStore((state) => state.settings.shadowIntensity);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
-  const { duplicateWidget, removeWidget, updateRect, updateSettings, updateWidget } = useWidgetStore();
+  const duplicateWidget = useWidgetStore((state) => state.duplicateWidget);
+  const removeWidget = useWidgetStore((state) => state.removeWidget);
+  const updateRect = useWidgetStore((state) => state.updateRect);
+  const updateSettings = useWidgetStore((state) => state.updateSettings);
+  const updateWidget = useWidgetStore((state) => state.updateWidget);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const locked = widget.locked || widget.pinned || appSettings.lockPositions;
-  const isDesktopWidget = overlay || (appSettings.desktopMode && widget.pinned);
+  const locked = widget.locked || widget.pinned || lockPositions;
+  const isDesktopWidget = overlay || (desktopMode && widget.pinned);
   const canDrag = !overlay && !locked;
   const dragControls = useDragControls();
   const backgroundClass = widget.settings.background === "transparent" ? "bg-transparent" : widget.settings.background === "solid" ? (widget.settings.color ? "widget-solid-tint" : "bg-panel/90") : "acrylic";
@@ -79,15 +93,23 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
   useEffect(() => {
     if (!overlay) return;
     let cleanup: (() => void) | undefined;
+    let animationFrame: number | null = null;
+    let pendingPosition: { x: number; y: number } | null = null;
+    let scaleFactor = 1;
     const window = getCurrentWindow();
 
+    void window.scaleFactor().then((value) => { scaleFactor = value; }).catch(() => undefined);
     void window
-      .onMoved(async ({ payload }) => {
-        const scaleFactor = await window.scaleFactor();
-        const position = payload.toLogical(scaleFactor);
-        updateRect(widget.id, {
-          x: Math.round(position.x),
-          y: Math.round(position.y)
+      .onMoved(({ payload }) => {
+        pendingPosition = payload.toLogical(scaleFactor);
+        if (animationFrame !== null) return;
+        animationFrame = requestAnimationFrame(() => {
+          animationFrame = null;
+          if (!pendingPosition) return;
+          updateRect(widget.id, {
+            x: Math.round(pendingPosition.x),
+            y: Math.round(pendingPosition.y)
+          });
         });
       })
       .then((unlisten) => {
@@ -95,20 +117,24 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
       })
       .catch(() => undefined);
 
-    return () => cleanup?.();
+    return () => {
+      cleanup?.();
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    };
   }, [overlay, updateRect, widget.id]);
+
+  if (widget.hidden && !overlay) return null;
 
   return (
     <motion.section
       ref={frameRef}
-      layout
       drag={canDrag}
       dragControls={dragControls}
       dragListener={!isDesktopWidget}
       dragMomentum={false}
       onDragEnd={(_, info) => {
         if (!canDrag) return;
-        const grid = appSettings.snapToGrid ? 12 : 1;
+        const grid = snapToGrid ? 12 : 1;
         const x = Math.round((widget.rect.x + info.offset.x) / grid) * grid;
         const y = Math.round((widget.rect.y + info.offset.y) / grid) * grid;
         updateRect(widget.id, {
@@ -129,8 +155,8 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
         borderRadius: widget.settings.radius,
         zIndex: widget.pinned ? 0 : (widget.zIndex ?? 10),
         "--widget-opacity": widget.settings.opacity,
-        "--blur-radius": `${appSettings.blurIntensity}px`,
-        "--shadow-strength": String(appSettings.shadowIntensity),
+        "--blur-radius": `${blurIntensity}px`,
+        "--shadow-strength": String(shadowIntensity),
         "--widget-tint": widget.settings.color ? hexToRgb(widget.settings.color) : undefined,
         "--accent": widget.settings.barColor ? hexToRgb(widget.settings.barColor) : undefined,
         "--text": widget.settings.textColor ? hexToRgb(widget.settings.textColor) : undefined,
@@ -217,11 +243,22 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
             const startX = event.clientX;
             const startY = event.clientY;
             const start = widget.rect;
-            const move = (moveEvent: PointerEvent) => updateRect(widget.id, {
-              width: Math.max(180, start.width + moveEvent.clientX - startX),
-              height: Math.max(150, start.height + moveEvent.clientY - startY)
-            });
+            let animationFrame: number | null = null;
+            let pendingRect = { width: start.width, height: start.height };
+            const applyResize = () => {
+              animationFrame = null;
+              updateRect(widget.id, pendingRect);
+            };
+            const move = (moveEvent: PointerEvent) => {
+              pendingRect = {
+                width: Math.max(180, start.width + moveEvent.clientX - startX),
+                height: Math.max(150, start.height + moveEvent.clientY - startY)
+              };
+              if (animationFrame === null) animationFrame = requestAnimationFrame(applyResize);
+            };
             const up = () => {
+              if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+              applyResize();
               window.removeEventListener("pointermove", move);
               window.removeEventListener("pointerup", up);
             };
@@ -259,6 +296,11 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
     </motion.section>
   );
 }
+
+export const WidgetFrame = memo(
+  WidgetFrameComponent,
+  (previous, next) => previous.widget === next.widget && previous.overlay === next.overlay && previous.selected === next.selected
+);
 
 function DesktopWidgetMenu({
   x,

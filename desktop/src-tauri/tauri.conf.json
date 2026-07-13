@@ -30,16 +30,26 @@
       "csp": null
     }
   },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "createUpdaterArtifacts": false,
+    "icon": ["icons/icon.ico", "icons/icon.png"]
+  },
   "plugins": {
     "deep-link": {
       "schemes": [
         "widgetapp"
       ]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI3REQwQzg3MUE0NjFERUIKUldUckhVWWFod3pkdDAvYnM2enpOMUhEeUwrTlV4Q1E2VWs1cWo2Rm1yc3dKMFU3YUVOcUtidlQK",
+      "endpoints": [
+        "https://github.com/susin-d/Widget-Studio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["msi", "nsis"],
-    "icon": ["icons/icon.ico", "icons/icon.png"]
   }
 }

@@ -149,6 +149,17 @@ From the repository root, build the MSI and refresh the installer asset and rele
 
 The script builds the MSI from `desktop/`, copies the verified artifact to `website/public/WidgetStudioInstaller.msi`, writes `website/public/installer.json` with the version, size, and SHA-256, and runs the website production build. Use `-SkipWebsiteBuild` when only the public asset and metadata need to be refreshed. The existing Vercel website project will deploy these committed changes on its normal deployment workflow.
 
+### Publishing signed desktop updates
+
+The desktop app checks the GitHub Releases feed at `https://github.com/susin-d/Widget-Studio/releases/latest/download/latest.json`. Releases are built by `.github/workflows/release.yml` when a tag matching the Tauri version is pushed. Before using the workflow, add these GitHub Actions secrets:
+
+```text
+TAURI_SIGNING_PRIVATE_KEY
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+Keep the private key out of the repository. The committed updater public key in `desktop/src-tauri/tauri.conf.json` must remain paired with that private key. To build signed artifacts locally, set `TAURI_SIGNING_PRIVATE_KEY` (or `TAURI_SIGNING_PRIVATE_KEY_PATH`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in the PowerShell session—even for a passwordless key, set the password variable to an explicit empty string—then run `npm run tauri:build:release` from `desktop/`.
+
 ---
 
 ## ☁️ Deploying Website and API as Separate Vercel Projects

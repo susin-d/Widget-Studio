@@ -1,0 +1,112 @@
+name: Release Widget Studio
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache
+            desktop/src-tauri/target
+          key: widget-studio-windows-${{ hashFiles('desktop/package-lock.json', 'desktop/src-tauri/Cargo.lock', 'desktop/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            widget-studio-windows-
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Validate release version
+        id: release
+        run: |
+          $config = Get-Content -Raw desktop/src-tauri/tauri.conf.json | ConvertFrom-Json
+          $tag = "${{ github.ref_name }}"
+          $expectedTag = "v$($config.version)"
+          if ($tag -ne $expectedTag) {
+            throw "Release tag $tag does not match the Tauri version $($config.version). Expected $expectedTag."
+          }
+          "version=$($config.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Build signed updater artifacts
+        working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+        run: npm run tauri:build:release
+
+      - name: Prepare release assets
+        id: assets
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          $version = $env:VERSION
+          $nsisDirectory = "desktop/src-tauri/target/release/bundle/nsis"
+          $setup = Get-ChildItem -LiteralPath $nsisDirectory -Filter "*-setup.exe" -File | Select-Object -First 1
+          if (-not $setup) {
+            throw "No NSIS setup executable was produced in $nsisDirectory."
+          }
+
+          $signaturePath = "$($setup.FullName).sig"
+          if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) {
+            throw "No updater signature was produced for $($setup.Name)."
+          }
+
+          $stagingDirectory = Join-Path $env:RUNNER_TEMP "widget-studio-release"
+          New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
+          $assetName = "widget-studio-$version-x64-setup.exe"
+          $assetPath = Join-Path $stagingDirectory $assetName
+          Copy-Item -LiteralPath $setup.FullName -Destination $assetPath -Force
+          Copy-Item -LiteralPath $signaturePath -Destination "$assetPath.sig" -Force
+
+          $msi = Get-ChildItem -LiteralPath "desktop/src-tauri/target/release/bundle/msi" -Filter "*.msi" -File | Select-Object -First 1
+          if ($msi) {
+            Copy-Item -LiteralPath $msi.FullName -Destination (Join-Path $stagingDirectory $msi.Name) -Force
+          }
+
+          & "$env:GITHUB_WORKSPACE/scripts/build-updater-manifest.ps1" `
+            -Version $version `
+            -ArtifactPath $assetPath `
+            -SignaturePath "$assetPath.sig" `
+            -ReleaseTag "v$version" `
+            -OutputPath (Join-Path $stagingDirectory "latest.json")
+
+          "directory=$stagingDirectory" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          ASSET_DIRECTORY: ${{ steps.assets.outputs.directory }}
+        run: |
+          $tag = "v$env:VERSION"
+          gh release create $tag --repo "${{ github.repository }}" --title "Widget Studio $env:VERSION" --generate-notes
+          Get-ChildItem -LiteralPath $env:ASSET_DIRECTORY -File | ForEach-Object {
+            gh release upload $tag $_.FullName --repo "${{ github.repository }}" --clobber
+          }

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { AppWindow, EyeOff, Grid3X3, Moon, Pin, Redo2, RotateCcw, Undo2 } from "lucide-react";
-import { loadPersistedState, resetCloudSyncCursor, savePersistedState } from "./lib/storage";
-import { nativeApi } from "./lib/tauri";
+import { AppWindow, Download, EyeOff, Grid3X3, LoaderCircle, Moon, Pin, Redo2, RotateCcw, Undo2 } from "lucide-react";
+import { loadPersistedState, resetCloudSyncCursor, saveLocalPersistedState, savePersistedState, syncPersistedStateToCloud } from "./lib/storage";
+import { isTauri, nativeApi } from "./lib/tauri";
+import { checkForUpdates, installUpdate } from "./lib/updater";
 import { useSettingsStore } from "./store/settingsStore";
 import { createWidget, useWidgetStore } from "./store/widgetStore";
 import { customWidgetDataFromDraft } from "./types/customWidget";
@@ -10,19 +11,19 @@ import { WidgetGallery } from "./components/layout/WidgetGallery";
 import { WidgetFrame } from "./components/layout/WidgetFrame";
 import { WidgetInspector } from "./components/layout/WidgetInspector";
 import { ManagerNavigation, type ManagerView } from "./components/layout/ManagerNavigation";
-import { CommandPalette } from "./components/layout/CommandPalette";
-import { ManagerPage } from "./components/layout/ManagerPages";
-import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { Button } from "./components/ui/Button";
 import { hexToRgb } from "./lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay } from "./lib/widgetActions";
 
 import { useAuthStore } from "./store/authStore";
 import type { PersistedState, WidgetKind } from "./types/widget";
+import type { Update } from "@tauri-apps/plugin-updater";
 
-export default function App() {
+const ManagerPage = lazy(() => import("./components/layout/ManagerPages").then((module) => ({ default: module.ManagerPage })));
+const CommandPalette = lazy(() => import("./components/layout/CommandPalette").then((module) => ({ default: module.CommandPalette })));
+
+export function App() {
   const widgetWindowId = new URLSearchParams(window.location.search).get("widget");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [managerView, setManagerView] = useState<ManagerView>("dashboard");
   const [searchOpen, setSearchOpen] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(100);
@@ -30,6 +31,10 @@ export default function App() {
   const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([]);
   const [developerWidgetId, setDeveloperWidgetId] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [updateState, setUpdateState] = useState<"idle" | "checking" | "installing">("idle");
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const reportError = useCallback((error: any, context: string) => {
     const msg = error instanceof Error ? error.message : String(error);
@@ -37,6 +42,35 @@ export default function App() {
     setErrorToast(`Action Failed (${context}): ${msg}`);
     setTimeout(() => setErrorToast(null), 5000);
   }, []);
+
+  const checkForAppUpdates = useCallback(async (showErrors = false) => {
+    if (!isTauri) return;
+    setUpdateState("checking");
+    try {
+      const update = await checkForUpdates();
+      setAvailableUpdate(update);
+      setUpdateError(null);
+    } catch (error) {
+      console.warn("Automatic update check failed:", error);
+      if (showErrors) setUpdateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUpdateState("idle");
+    }
+  }, []);
+
+  const installAvailableUpdate = useCallback(async () => {
+    if (!availableUpdate) return;
+    setUpdateState("installing");
+    setUpdateProgress(0);
+    setUpdateError(null);
+    try {
+      await installUpdate(availableUpdate, setUpdateProgress);
+    } catch (error) {
+      console.error("Update installation failed:", error);
+      setUpdateState("idle");
+      setUpdateError(error instanceof Error ? error.message : String(error));
+    }
+  }, [availableUpdate]);
   const widgets = useWidgetStore((state) => state.widgets);
   const addWidget = useWidgetStore((state) => state.addWidget);
   const hydrate = useWidgetStore((state) => state.hydrate);
@@ -115,6 +149,12 @@ export default function App() {
     });
   }, [applyLoadedState]);
 
+  useEffect(() => {
+    if (isWidgetWindow || !isTauri) return;
+    const timer = window.setTimeout(() => void checkForAppUpdates(), 2500);
+    return () => window.clearTimeout(timer);
+  }, [checkForAppUpdates, isWidgetWindow]);
+
   // Email/password and web OAuth establish a session after the initial load. Pull the
   // cloud layout for login/OAuth, while a new signup publishes the current local layout.
   useEffect(() => {
@@ -132,31 +172,53 @@ export default function App() {
 
   // Deep Link handler for OAuth redirects
   useEffect(() => {
-    let unlisten: any;
+    let unlistenDeepLink: (() => void) | undefined;
+    let unlistenSingleInstance: (() => void) | undefined;
     if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
-      import("@tauri-apps/plugin-deep-link").then(({ onOpenUrl }) => {
-        onOpenUrl((urls) => {
-          console.log("Deep link URL received:", urls);
-          for (const url of urls) {
-            // Support both callback formats (with trailing slash or path parameters)
-            if (url.startsWith("widgetapp://auth/callback")) {
+      const handleUrls = (urls: string[]) => {
+        console.log("Deep link URL received:", urls);
+        for (const url of urls) {
+          // Support both callback formats (with trailing slash or path parameters)
+          if (url.startsWith("widgetapp://auth/callback")) {
+            try {
               const urlObj = new URL(url);
               const token = urlObj.searchParams.get("token");
               const email = urlObj.searchParams.get("email");
               if (token && email) {
+                void nativeApi.showWindow().catch((error) => {
+                  console.warn("Could not restore Widget Studio after OAuth:", error);
+                });
                 useAuthStore.getState().setSession(token, email, "oauth");
               }
+            } catch (error) {
+              console.warn("Ignoring malformed Widget Studio OAuth callback:", error);
             }
           }
-        }).then((fn) => {
-          unlisten = fn;
-        });
+        }
+      };
+
+      import("@tauri-apps/plugin-deep-link").then(({ getCurrent, onOpenUrl }) => {
+        // Windows passes a custom-protocol URL as a startup argument. The live
+        // event alone is not enough when the browser launches a new process.
+        void getCurrent()
+          .then((urls) => { if (urls?.length) handleUrls(urls); })
+          .catch((error) => console.warn("Could not read startup deep link:", error));
+
+        return onOpenUrl(handleUrls).then((unlisten) => { unlistenDeepLink = unlisten; });
       }).catch((e) => {
         console.warn("Failed to initialize Tauri deep link plugin:", e);
       });
+
+      // The native single-instance guard forwards URLs from blocked secondary
+      // launches so OAuth still completes in the already-running application.
+      import("@tauri-apps/api/event")
+        .then(({ listen }) => listen<string[]>("single-instance-deep-links", ({ payload }) => handleUrls(payload)))
+        .then((unlisten) => { unlistenSingleInstance = unlisten; })
+        .catch((error) => console.warn("Failed to listen for secondary launch URLs:", error));
     }
     return () => {
-      if (unlisten) unlisten();
+      unlistenDeepLink?.();
+      unlistenSingleInstance?.();
     };
   }, [hydrate, setSettings]);
 
@@ -175,8 +237,14 @@ export default function App() {
   }, [settings.theme, settings.colorTheme, settings.accentColor, isWidgetWindow, widgetWindowId, widgets]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void savePersistedState(persisted), 300);
-    return () => window.clearTimeout(timer);
+    if (!initialStateLoaded.current) return;
+
+    const localTimer = window.setTimeout(() => void saveLocalPersistedState(persisted), 250);
+    const cloudTimer = window.setTimeout(() => void syncPersistedStateToCloud(persisted), 1800);
+    return () => {
+      window.clearTimeout(localTimer);
+      window.clearTimeout(cloudTimer);
+    };
   }, [persisted]);
 
   useEffect(() => {
@@ -297,7 +365,7 @@ export default function App() {
       </header>
       <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
       <ManagerNavigation view={managerView} onView={handleManagerViewChange} onSearch={() => setSearchOpen(true)} />
-      {managerView !== "widgets" ? <ManagerPage view={managerView} widgets={widgets} onSetWidgets={setWidgets} editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null} onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }} onOpenWidgets={() => setManagerView("widgets")} /> : <>
+      {managerView !== "widgets" ? <Suspense fallback={<div className="content-panel flex-1 text-sm text-muted">Loading workspace…</div>}><ManagerPage view={managerView} widgets={widgets} onSetWidgets={setWidgets} editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null} onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }} onOpenWidgets={() => setManagerView("widgets")} /></Suspense> : <>
       <WidgetGallery selectedWidgetId={selectedWidgetId} onSelectWidget={setSelectedWidgetId} onSettings={() => setManagerView("settings")} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
       <section
         className="widget-canvas relative flex-1 overflow-hidden"
@@ -358,14 +426,31 @@ export default function App() {
       <WidgetInspector widget={selectedWidget} onSelectWidget={setSelectedWidgetId} onOpenDeveloper={(id) => { setDeveloperWidgetId(id); setManagerView("developer"); }} />
       </>}
       </div>
-      {searchOpen && <CommandPalette
+      {searchOpen && <Suspense fallback={null}><CommandPalette
         widgets={widgets}
         onClose={() => setSearchOpen(false)}
         onView={handleManagerViewChange}
         onCreateWidget={addWidgetFromPalette}
         onOpenWidget={openWidgetFromPalette}
-      />}
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      /></Suspense>}
+      {availableUpdate && (
+        <div className="fixed right-6 top-14 z-50 w-[min(28rem,calc(100vw-3rem))] rounded-xl border border-accent/30 bg-panel/95 p-4 shadow-win backdrop-blur-xl">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-accent/15 p-2 text-accent"><Download size={18} /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Widget Studio {availableUpdate.version} is ready</p>
+              <p className="mt-1 text-xs text-muted">{availableUpdate.body || "Download and install the latest signed desktop build."}</p>
+              {updateError && <p className="mt-2 text-xs text-red-600 dark:text-red-300">{updateError}</p>}
+              <div className="mt-3 flex items-center gap-2">
+                <button type="button" onClick={() => void installAvailableUpdate()} disabled={updateState === "installing"} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white disabled:cursor-wait disabled:opacity-70">
+                  {updateState === "installing" ? <><LoaderCircle size={13} className="animate-spin" /> Installing {updateProgress}%</> : "Install update"}
+                </button>
+                <button type="button" onClick={() => setAvailableUpdate(null)} disabled={updateState === "installing"} className="rounded-lg px-3 py-2 text-xs font-semibold text-muted hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5">Later</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {errorToast && (
         <div className="fixed bottom-16 right-6 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-red-500 bg-red-50 p-4 text-xs font-medium text-red-800 shadow-win dark:bg-red-950/90 dark:text-red-200">
           <span>⚠️ {errorToast}</span>
