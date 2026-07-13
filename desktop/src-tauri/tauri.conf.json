@@ -17,7 +17,7 @@
         "title": "Widget Studio",
         "width": 1200,
         "height": 760,
-        "decorations": false,
+        "decorations": true,
         "transparent": false,
         "resizable": true,
         "alwaysOnTop": false,
@@ -34,7 +34,13 @@
     "active": true,
     "targets": ["msi", "nsis"],
     "createUpdaterArtifacts": false,
-    "icon": ["icons/icon.ico", "icons/icon.png"]
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "windows": {
+      "wix": {
+        "bannerPath": "installer/wix-banner.bmp",
+        "dialogImagePath": "installer/wix-dialog.bmp"
+      }
+    }
   },
   "plugins": {
     "deep-link": {

@@ -22,6 +22,32 @@ const findWidget = (widgets: DesktopWidget[], query: string) => {
     ?? widgets.find((widget) => widget.name.toLowerCase().includes(needle) || widget.type === needle);
 };
 
+interface TodoItem {
+  id: string;
+  text: string;
+  done?: boolean;
+  deadline?: string;
+  notified?: boolean;
+}
+
+const todoItems = (widget: DesktopWidget): TodoItem[] =>
+  Array.isArray(widget.data?.items) ? widget.data.items as TodoItem[] : [];
+
+const findTodoItem = (widget: DesktopWidget, query: string) => {
+  const needle = query.trim().toLowerCase();
+  const items = todoItems(widget);
+  if (/^(?:the )?(?:current|first|top) (?:todo|task)$/.test(needle) || /^(?:current|first|top)$/.test(needle)) {
+    return items[0];
+  }
+  return items.find((item) => item.text.trim().toLowerCase() === needle)
+    ?? items.find((item) => item.text.toLowerCase().includes(needle));
+};
+
+const updateTodoItems = (widgets: DesktopWidget[], todo: DesktopWidget, items: TodoItem[]) =>
+  widgets.map((widget) => widget.id === todo.id
+    ? { ...widget, data: { ...widget.data, items } }
+    : widget);
+
 export function executeWidgetCommand(command: string, input: DesktopWidget[]): WidgetAgentResult {
   const widgets = input.map((widget) => ({ ...widget, data: widget.data ? { ...widget.data } : {} }));
   const value = command.trim();
@@ -78,6 +104,64 @@ export function executeWidgetCommand(command: string, input: DesktopWidget[]): W
     next = next.map((widget) => widget.id === todo!.id ? { ...widget, data: { ...widget.data, items: [...(Array.isArray(widget.data?.items) ? widget.data.items : []), { id: crypto.randomUUID(), text: todoAdd[1].trim(), done: false }] } } : widget);
     return { widgets: next, message: `Added task “${todoAdd[1].trim()}”.` };
   }
+
+  const todoList = value.match(/^(?:list|show)(?: my)? (?:todo|tasks?)$/i);
+  if (todoList) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    const items = todoItems(todo);
+    return { widgets: input, message: items.length
+      ? items.map((item, index) => `${index + 1}. ${item.text}${item.done ? " (done)" : ""}`).join(" · ")
+      : "Your Todo list is empty." };
+  }
+
+  const editTodo = value.match(/^(?:edit|update|rename|change) (?:todo |task )?(.+?)\s+(?:to|as)\s+(.+)$/i)
+    ?? value.match(/^(?:edit|update|rename|change) (?:todo |task )?:\s*(.+?)\s*\|\s*(.+)$/i);
+  if (editTodo) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    const item = findTodoItem(todo, editTodo[1]);
+    if (!item) return { widgets: input, message: `I couldn't find task “${editTodo[1]}”.` };
+    const text = editTodo[2].trim();
+    if (!text) return { widgets: input, message: "The new task text cannot be empty." };
+    const nextItems = todoItems(todo).map((candidate) => candidate.id === item.id ? { ...candidate, text } : candidate);
+    return { widgets: updateTodoItems(widgets, todo, nextItems), message: `Renamed task to “${text}”.` };
+  }
+
+  const deleteTodo = value.match(/^(?:delete|remove|clear) (?:todo |task )?(.+)$/i);
+  if (deleteTodo && !/^(?:all|every) tasks?$/i.test(deleteTodo[1].trim())) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    const item = findTodoItem(todo, deleteTodo[1]);
+    if (!item) return { widgets: input, message: `I couldn't find task “${deleteTodo[1]}”.` };
+    return { widgets: updateTodoItems(widgets, todo, todoItems(todo).filter((candidate) => candidate.id !== item.id)), message: `Deleted task “${item.text}”.` };
+  }
+
+  const clearTodos = value.match(/^(?:clear|delete|remove) (?:all|every) (?:todo|tasks?)$/i);
+  if (clearTodos) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    return { widgets: updateTodoItems(widgets, todo, []), message: "Cleared the Todo list." };
+  }
+
+  const completeTodo = value.match(/^(?:complete|finish|check off|mark done) (?:todo |task )?(.+)$/i);
+  if (completeTodo && !/^(?:all|every) tasks?$/i.test(completeTodo[1].trim())) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    const item = findTodoItem(todo, completeTodo[1]);
+    if (!item) return { widgets: input, message: `I couldn't find task “${completeTodo[1]}”.` };
+    return { widgets: updateTodoItems(widgets, todo, todoItems(todo).map((candidate) => candidate.id === item.id ? { ...candidate, done: true } : candidate)), message: `Completed task “${item.text}”.` };
+  }
+
+  const reopenTodo = value.match(/^(?:reopen|uncomplete|mark not done) (?:todo |task )?(.+)$/i);
+  if (reopenTodo) {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) return { widgets: input, message: "No Todo widget is installed." };
+    const item = findTodoItem(todo, reopenTodo[1]);
+    if (!item) return { widgets: input, message: `I couldn't find task “${reopenTodo[1]}”.` };
+    return { widgets: updateTodoItems(widgets, todo, todoItems(todo).map((candidate) => candidate.id === item.id ? { ...candidate, done: false, notified: false } : candidate)), message: `Reopened task “${item.text}”.` };
+  }
+
   if (/^(complete|finish|check off) (all )?(todo|tasks?)$/i.test(value)) {
     return { widgets: widgets.map((widget) => widget.type === "todo" ? { ...widget, data: { ...widget.data, items: (Array.isArray(widget.data?.items) ? widget.data.items : []).map((item: any) => ({ ...item, done: true })) } } : widget), message: "Completed every Todo task." };
   }

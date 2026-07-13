@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, Flame, Coffee, Trophy } from "lucide-react";
+import { Play, Pause, RotateCcw, Flame, Coffee, Trophy, ListTodo } from "lucide-react";
 import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget } from "../../types/widget";
 
@@ -13,6 +13,10 @@ const PRESETS: Record<TimerMode, { label: string; duration: number; icon: React.
 
 export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
   const updateWidget = useWidgetStore((state) => state.updateWidget);
+  const widgets = useWidgetStore((state) => state.widgets);
+  const todoWidget = widgets.find((candidate) => candidate.type === "todo");
+  const todoItems = (todoWidget?.data?.items as Array<{ id: string; text: string; done?: boolean }> | undefined) ?? [];
+  const activeTaskId = typeof widget.data?.activeTaskId === "string" ? widget.data.activeTaskId : "";
 
   const initialMode = (widget.data?.mode as TimerMode) || "focus";
   const initialDuration = PRESETS[initialMode].duration;
@@ -20,6 +24,7 @@ export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
   const [mode, setMode] = useState<TimerMode>(initialMode);
   const [timeLeft, setTimeLeft] = useState<number>(initialDuration);
   const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [completionNotice, setCompletionNotice] = useState("");
 
   const timerRef = useRef<number | null>(null);
 
@@ -37,6 +42,18 @@ export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
           if (prev <= 1) {
             setIsRunning(false);
             if (timerRef.current) clearInterval(timerRef.current);
+            if (mode === "focus" && activeTaskId && todoWidget) {
+              const task = todoItems.find((item) => item.id === activeTaskId);
+              if (task && !task.done) {
+                updateWidget(todoWidget.id, {
+                  data: {
+                    ...todoWidget.data,
+                    items: todoItems.map((item) => item.id === activeTaskId ? { ...item, done: true } : item)
+                  }
+                });
+                setCompletionNotice(`Completed: ${task.text}`);
+              }
+            }
             // Play notification or sound could go here
             return 0;
           }
@@ -52,15 +69,27 @@ export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning]);
+  }, [activeTaskId, isRunning, mode, todoItems, todoWidget, updateWidget]);
 
   const handleStartPause = () => {
+    if (!isRunning && mode === "focus" && todoWidget && !activeTaskId) {
+      const firstOpenTask = todoItems.find((item) => !item.done);
+      if (firstOpenTask) {
+        updateWidget(widget.id, { data: { ...widget.data, activeTaskId: firstOpenTask.id } });
+      }
+    }
+    setCompletionNotice("");
     setIsRunning(!isRunning);
   };
 
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(PRESETS[mode].duration);
+  };
+
+  const selectTask = (taskId: string) => {
+    setCompletionNotice("");
+    updateWidget(widget.id, { data: { ...widget.data, activeTaskId: taskId || undefined } });
   };
 
   const formatTime = (seconds: number) => {
@@ -98,6 +127,24 @@ export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
           );
         })}
       </div>
+
+      {mode === "focus" && (
+        <div className="flex w-full max-w-xs items-center gap-1.5 rounded-lg bg-black/5 px-2 py-1.5 dark:bg-white/5">
+          <ListTodo size={13} className="shrink-0 text-accent" />
+          <select
+            value={activeTaskId}
+            onChange={(event) => selectTask(event.target.value)}
+            disabled={isRunning || todoItems.length === 0}
+            aria-label="Task for focus session"
+            className="min-w-0 flex-1 bg-transparent text-[10px] outline-none"
+          >
+            <option value="">{todoItems.length ? "Choose a task" : "Add a task first"}</option>
+            {todoItems.filter((item) => !item.done).map((item) => (
+              <option key={item.id} value={item.id}>{item.text}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Progress & Time */}
       <div className="relative flex items-center justify-center my-2">
@@ -148,6 +195,7 @@ export function PomodoroWidget({ widget }: { widget: DesktopWidget }) {
           {isRunning ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
         </button>
       </div>
+      {completionNotice && <p className="max-w-xs truncate text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">{completionNotice}</p>}
     </div>
   );
 }

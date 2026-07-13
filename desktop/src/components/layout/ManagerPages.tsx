@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bot, Check, CheckSquare, Cloud, Cpu, Download, Eye, EyeOff, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Pin, Plus, Play, RotateCw, ShieldCheck, Sparkles, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Cloud, Cpu, Download, Eye, EyeOff, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Pin, Plus, Play, RotateCw, ShieldCheck, Sparkles, Star, Trash2, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ManagerView } from "./ManagerNavigation";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
@@ -8,7 +8,7 @@ import { savePersistedState } from "../../lib/storage";
 import { WidgetBuilder } from "../developer/WidgetBuilder";
 import { useSystemInfo } from "../../hooks/useSystemInfo";
 import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidgetPermission } from "../../types/customWidget";
-import { isTauri } from "../../lib/tauri";
+import { isTauri, nativeApi } from "../../lib/tauri";
 import { createWidget, useWidgetStore } from "../../store/widgetStore";
 import { executeWidgetCommand } from "../../lib/widgetAgent";
 
@@ -464,6 +464,18 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
   const { settings, updateSetting } = useSettingsStore();
   const { notices, markAllRead, lastBackup, backup, restoreBackup } = useManagerStore();
   const [successMsg, setSuccessMsg] = useState("");
+  const [settingsError, setSettingsError] = useState("");
+
+  const openUninstallSettings = async () => {
+    if (!window.confirm("Open Windows Installed apps to uninstall Widget Studio?")) return;
+
+    setSettingsError("");
+    try {
+      await nativeApi.openUninstallSettings();
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "Could not open Windows Installed apps.");
+    }
+  };
 
   if (view === "settings") {
     return (
@@ -508,6 +520,23 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
               <input type="checkbox" checked={settings.lockPositions} onChange={(e) => updateSetting("lockPositions", e.target.checked)} className="h-4 w-4 accent-accent" />
               <span>Lock all widget coordinates</span>
             </label>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t border-black/10 pt-4 dark:border-white/10">
+            <div>
+              <b className="block text-sm">Uninstall Widget Studio</b>
+              <p className="mt-1 text-xs text-muted">Open Windows Installed apps, then confirm removal of Widget Studio.</p>
+              {settingsError && <p className="mt-1 text-xs font-semibold text-red-500">{settingsError}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={() => void openUninstallSettings()}
+              disabled={!isTauri}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+              title={isTauri ? "Open Windows Installed apps" : "Available in the desktop app"}
+            >
+              <Trash2 size={15} />
+              Uninstall
+            </button>
           </div>
         </div>
       </Page>

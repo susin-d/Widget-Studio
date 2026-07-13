@@ -169,7 +169,10 @@ export function TodoWidget({ widget }: { widget: DesktopWidget }) {
                   </button>
                   <button
                     onClick={() => removeTask(item.id)}
-                    className="hidden shrink-0 text-red-500 hover:text-red-700 group-hover/todo:block p-1 rounded hover:bg-black/5 dark:hover:bg-white/5"
+                    type="button"
+                    aria-label={`Delete task: ${item.text || "Untitled task"}`}
+                    title="Delete task"
+                    className="shrink-0 rounded p-1 text-red-500 hover:bg-black/5 hover:text-red-700 dark:hover:bg-white/5"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -248,4 +251,3 @@ export function TodoWidget({ widget }: { widget: DesktopWidget }) {
     </div>
   );
 }
-

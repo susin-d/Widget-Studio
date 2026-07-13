@@ -268,6 +268,23 @@ pub fn set_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), String>
 }
 
 #[tauri::command]
+pub fn open_uninstall_settings() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg("ms-settings:appsfeatures")
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Could not open Windows Installed apps: {error}"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Uninstall settings are only available on Windows.".into())
+    }
+}
+
+#[tauri::command]
 pub fn copy_to_clipboard(text: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

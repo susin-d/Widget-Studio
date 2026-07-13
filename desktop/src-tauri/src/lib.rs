@@ -16,6 +16,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
+                let _ = window.maximize();
                 let _ = window.set_focus();
 
                 let deep_links: Vec<String> = args
@@ -49,6 +50,7 @@ pub fn run() {
             commands::close_widget_window,
             commands::set_window_size,
             commands::set_window_position,
+            commands::open_uninstall_settings,
             commands::copy_to_clipboard
         ])
         .setup(|app| {

@@ -94,8 +94,10 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
   useEffect(() => {
     if (!overlay) return;
     let cleanup: (() => void) | undefined;
+    let resizeCleanup: (() => void) | undefined;
     let animationFrame: number | null = null;
     let pendingPosition: { x: number; y: number } | null = null;
+    let pendingSize: { width: number; height: number } | null = null;
     let scaleFactor = 1;
     const window = getCurrentWindow();
 
@@ -118,8 +120,37 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
       })
       .catch(() => undefined);
 
+    void window
+      .onResized(({ payload }) => {
+        const size = payload.toLogical(scaleFactor);
+        pendingSize = {
+          width: Math.max(180, Math.round(size.width)),
+          height: Math.max(150, Math.round(size.height))
+        };
+        if (animationFrame !== null) return;
+        animationFrame = requestAnimationFrame(() => {
+          animationFrame = null;
+          if (pendingPosition) {
+            updateRect(widget.id, {
+              x: Math.round(pendingPosition.x),
+              y: Math.round(pendingPosition.y)
+            });
+            pendingPosition = null;
+          }
+          if (pendingSize) {
+            updateRect(widget.id, pendingSize);
+            pendingSize = null;
+          }
+        });
+      })
+      .then((unlisten) => {
+        resizeCleanup = unlisten;
+      })
+      .catch(() => undefined);
+
     return () => {
       cleanup?.();
+      resizeCleanup?.();
       if (animationFrame !== null) cancelAnimationFrame(animationFrame);
     };
   }, [overlay, updateRect, widget.id]);
@@ -149,10 +180,10 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className={`group absolute ${isDesktopWidget ? `overflow-visible select-none border border-transparent ${widget.settings.background === "transparent" ? "p-0" : "p-4 shadow-widget"} ${desktopThemeClass}` : "overflow-hidden border border-white/30 p-4 shadow-widget"} ${backgroundClass}`}
       style={{
-        width: overlay ? "max-content" : widget.rect.width,
-        height: overlay ? "max-content" : widget.rect.height,
-        minWidth: overlay ? 1 : undefined,
-        minHeight: overlay ? 1 : undefined,
+        width: widget.rect.width,
+        height: widget.rect.height,
+        minWidth: overlay ? 180 : undefined,
+        minHeight: overlay ? 150 : undefined,
         borderRadius: widget.settings.radius,
         zIndex: widget.pinned ? 0 : (widget.zIndex ?? 10),
         "--widget-opacity": widget.settings.opacity,
@@ -214,7 +245,7 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
           </button>
         </header>
       )}
-      <div className={`${isDesktopWidget ? "h-auto w-max overflow-visible" : "h-[calc(100%-36px)] overflow-hidden"}`} style={{ fontSize: widget.settings.fontSize }}>
+      <div className={`${isDesktopWidget ? "h-full w-full overflow-hidden" : "h-[calc(100%-36px)] overflow-hidden"}`} style={{ fontSize: widget.settings.fontSize }}>
         <WidgetBody widget={widget} overlay={overlay} />
       </div>
       {!isDesktopWidget && isTauri && <div className="absolute right-2 top-11 hidden rounded-lg bg-panel/95 p-1 shadow-win group-hover:flex">
@@ -238,8 +269,15 @@ function WidgetFrameComponent({ widget, overlay = false, selected = false, onSel
       </div>}
       {(!locked || overlay) && (
         <div
+          data-resize-handle
           className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-br-lg border-b-2 border-r-2 border-muted/60"
           onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (overlay) {
+              void getCurrentWindow().startResizeDragging("SouthEast").catch(() => undefined);
+              return;
+            }
             event.currentTarget.setPointerCapture(event.pointerId);
             const startX = event.clientX;
             const startY = event.clientY;
@@ -392,7 +430,7 @@ function titleCase(value: string): string {
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest("button, input, textarea, select, label, a, [data-menu]"));
+  return target instanceof Element && Boolean(target.closest("button, input, textarea, select, label, a, [data-menu], [data-resize-handle]"));
 }
 
 

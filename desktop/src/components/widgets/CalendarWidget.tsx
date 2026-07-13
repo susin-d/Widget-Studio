@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Plus, Trash2 } from "lucide-react";
 import type { DesktopWidget } from "../../types/widget";
 import { useWidgetStore } from "../../store/widgetStore";
 
 export function CalendarWidget({ widget }: { widget?: DesktopWidget }) {
   const updateWidget = useWidgetStore((state) => state.updateWidget);
+  const widgets = useWidgetStore((state) => state.widgets);
   const events = (widget?.data?.events as Record<string, string[]> | undefined) ?? {};
+  const todoWidget = widgets.find((candidate) => candidate.type === "todo");
+  const todoItems = (todoWidget?.data?.items as Array<{ id: string; text: string; done?: boolean; deadline?: string }> | undefined) ?? [];
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -41,6 +44,25 @@ export function CalendarWidget({ widget }: { widget?: DesktopWidget }) {
     return `${year}-${mm}-${dd}`;
   };
 
+  const getTaskDateKey = (deadline: string) => {
+    const date = new Date(deadline);
+    if (Number.isNaN(date.getTime())) return null;
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${mm}-${dd}`;
+  };
+
+  const eventsForDay = (day: number) => {
+    const key = getDateKey(day);
+    const taskEvents = todoItems
+      .filter((item) => item.deadline && getTaskDateKey(item.deadline) === key)
+      .map((item) => ({ text: `${item.done ? "✓" : "•"} ${item.text}`, taskId: item.id, done: Boolean(item.done) }));
+    return [
+      ...(events[key] ?? []).map((text) => ({ text, taskId: undefined, done: false })),
+      ...taskEvents
+    ];
+  };
+
   const addEvent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!widget || selectedDay === null || !newEvent.trim()) return;
@@ -67,7 +89,13 @@ export function CalendarWidget({ widget }: { widget?: DesktopWidget }) {
   };
 
   const dayHasEvents = (day: number) => {
-    return (events[getDateKey(day)] ?? []).length > 0;
+    return eventsForDay(day).length > 0;
+  };
+
+  const toggleTask = (taskId: string) => {
+    if (!todoWidget) return;
+    const nextItems = todoItems.map((item) => item.id === taskId ? { ...item, done: !item.done } : item);
+    updateWidget(todoWidget.id, { data: { ...todoWidget.data, items: nextItems } });
   };
 
   return (
@@ -148,18 +176,29 @@ export function CalendarWidget({ widget }: { widget?: DesktopWidget }) {
           ) : null}
 
           <div className="max-h-20 overflow-y-auto space-y-1">
-            {(events[getDateKey(selectedDay)] ?? []).map((evt, idx) => (
-              <div key={idx} className="flex items-center justify-between rounded bg-black/5 px-2 py-1 text-xs dark:bg-white/5 group/evt">
-                <span className="truncate pr-2">{evt}</span>
-                <button
-                  onClick={() => removeEvent(selectedDay, idx)}
-                  className="hidden text-red-500 hover:text-red-700 group-hover/evt:block"
-                >
-                  <Trash2 size={11} />
-                </button>
+            {eventsForDay(selectedDay).map((evt, idx) => (
+              <div key={evt.taskId ?? `event-${idx}`} className="flex items-center justify-between rounded bg-black/5 px-2 py-1 text-xs dark:bg-white/5 group/evt">
+                <span className={`flex min-w-0 items-center gap-1 truncate pr-2 ${evt.taskId ? "text-accent" : ""}`}>
+                  {evt.taskId && (evt.done ? <CheckCircle2 size={11} /> : <Circle size={11} />)}
+                  <span className="truncate">{evt.text}</span>
+                </span>
+                {evt.taskId ? (
+                  <button type="button" onClick={() => toggleTask(evt.taskId!)} title={evt.done ? "Reopen task" : "Complete task"} className="shrink-0 text-accent hover:underline">
+                    {evt.done ? "Reopen" : "Done"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => removeEvent(selectedDay, idx)}
+                    aria-label="Delete event"
+                    className="shrink-0 text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
               </div>
             ))}
-            {(events[getDateKey(selectedDay)] ?? []).length === 0 && !isAddingEvent ? (
+            {eventsForDay(selectedDay).length === 0 && !isAddingEvent ? (
               <p className="text-[10px] text-muted italic">No events today.</p>
             ) : null}
           </div>
@@ -168,4 +207,3 @@ export function CalendarWidget({ widget }: { widget?: DesktopWidget }) {
     </div>
   );
 }
-

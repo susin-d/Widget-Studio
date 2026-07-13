@@ -142,7 +142,8 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
       }
     }
 
-    // Local simulation fallback
+    // Local fallback is intentionally limited. Widget commands above work
+    // offline; general knowledge needs an authenticated backend AI session.
     setTimeout(() => {
       let responseText = "";
       const lower = userMessage.text.toLowerCase();
@@ -153,9 +154,10 @@ export function ChatbotWidget({ widget }: { widget: DesktopWidget }) {
         responseText = "The weather is currently offline-safe and ambient, but it is always sunny inside Widget Studio!";
       } else if (lower.includes("date") || lower.includes("calendar")) {
         responseText = `Today is ${new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Check the Calendar widget to plan ahead!`;
+      } else if (!token) {
+        responseText = "I can edit your widgets offline, but general questions need the AI backend. Sign in to Widget Studio and try again.";
       } else {
-        const pool = BOT_RESPONSES[currentPersona] || BOT_RESPONSES.assistant;
-        responseText = pool[Math.floor(Math.random() * pool.length)];
+        responseText = "I couldn't reach the AI backend just now. Please check your connection and try again.";
       }
 
       const aiMessage: Message = {

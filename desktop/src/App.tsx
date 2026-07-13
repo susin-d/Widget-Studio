@@ -365,7 +365,7 @@ export function App() {
   }
 
   return (
-    <main className="app-shell flex h-full flex-col bg-surface/80 text-text" data-tauri-drag-region>
+    <main className="app-shell flex h-full flex-col bg-surface/80 text-text">
       <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
       <ManagerNavigation view={managerView} onView={handleManagerViewChange} onSearch={() => setSearchOpen(true)} />
       {managerView !== "widgets" ? <Suspense fallback={<div className="content-panel flex-1 text-sm text-muted">Loading workspace…</div>}><ManagerPage view={managerView} widgets={widgets} onSetWidgets={setWidgets} editingWidget={developerWidgetId ? widgets.find((widget) => widget.id === developerWidgetId) ?? null : null} onPublishCustomWidget={(draft, existingWidget) => { const data = customWidgetDataFromDraft(draft) as Record<string, unknown>; if (existingWidget) { updateWidget(existingWidget.id, { name: draft.name, data }); setSelectedWidgetId(existingWidget.id); } else { const widget = createWidget("custom", widgets.length); widget.name = draft.name; widget.data = data; setWidgets([...widgets, widget]); setSelectedWidgetId(widget.id); } setDeveloperWidgetId(null); setManagerView("widgets"); }} onOpenWidgets={() => setManagerView("widgets")} /></Suspense> : <>
