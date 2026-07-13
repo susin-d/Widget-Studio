@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use std::{
     fs,
     path::PathBuf,
@@ -20,6 +21,103 @@ const WIDGET_WINDOW_MIN_SIZE: f64 = 1.0;
 const TEMPORARY_TOPMOST_DURATION: Duration = Duration::from_millis(700);
 const VISIBILITY_MONITOR_INTERVAL: Duration = Duration::from_secs(1);
 const OPENAI_CREDENTIAL_TARGET: &str = "Widget Studio/OpenAI API Key";
+
+#[derive(Deserialize)]
+pub struct AiChatMessage {
+    role: String,
+    text: String,
+}
+
+#[derive(Deserialize)]
+pub struct AiChatRequest {
+    api_key: String,
+    base_url: String,
+    model: String,
+    messages: Vec<AiChatMessage>,
+    max_tokens: u32,
+    temperature: f32,
+    reasoning_effort: String,
+    timeout_seconds: u64,
+}
+
+#[derive(Deserialize)]
+struct AiChatResponse {
+    choices: Vec<AiChoice>,
+}
+
+#[derive(Deserialize)]
+struct AiChoice {
+    message: AiResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct AiResponseMessage {
+    content: Option<String>,
+}
+
+#[tauri::command]
+pub async fn complete_ai_chat(request: AiChatRequest) -> Result<String, String> {
+    let base_url = request.base_url.trim().trim_end_matches('/');
+    let url = if base_url.ends_with("/chat/completions") {
+        base_url.to_string()
+    } else {
+        format!("{base_url}/chat/completions")
+    };
+    let messages: Vec<Value> = request
+        .messages
+        .into_iter()
+        .map(|message| {
+            serde_json::json!({
+                "role": match message.role.as_str() {
+                    "system" => "system",
+                    "assistant" => "assistant",
+                    _ => "user",
+                },
+                "content": message.text,
+            })
+        })
+        .collect();
+    let body = serde_json::json!({
+        "model": request.model.trim(),
+        "messages": messages,
+        "max_tokens": request.max_tokens,
+        "temperature": request.temperature,
+        "reasoning_effort": request.reasoning_effort,
+    });
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(request.timeout_seconds))
+        .build()
+        .map_err(|error| format!("Could not create the AI connection: {error}"))?;
+    let response = client
+        .post(url)
+        .header(AUTHORIZATION, format!("Bearer {}", request.api_key.trim()))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach the AI provider: {error}"))?;
+    let status = response.status();
+    let payload: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("The AI provider returned invalid JSON: {error}"))?;
+    if !status.is_success() {
+        let detail = payload
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("The provider rejected the request.");
+        return Err(format!("HTTP {}: {detail}", status.as_u16()));
+    }
+    let parsed: AiChatResponse = serde_json::from_value(payload)
+        .map_err(|error| format!("The AI provider returned an unexpected response: {error}"))?;
+    parsed
+        .choices
+        .into_iter()
+        .find_map(|choice| choice.message.content.filter(|content| !content.trim().is_empty()))
+        .map(|content| content.trim().to_string())
+        .ok_or_else(|| "The AI provider returned no response text. Increase Max output tokens and try again.".to_string())
+}
 
 #[tauri::command]
 pub fn get_openai_api_key() -> Result<Option<String>, String> {

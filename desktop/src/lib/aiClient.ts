@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { nativeApi } from "./tauri";
+import { isTauri, nativeApi } from "./tauri";
 import { normalizeBaseUrl, useAiProviderStore, type AiProviderSettings } from "../store/aiProviderStore";
 
 export type DesktopReasoningEffort = "low" | "medium" | "high" | "max";
@@ -55,21 +55,32 @@ export async function completeDesktopChat(
   persona: string,
   reasoningEffort: DesktopReasoningEffort,
 ): Promise<string> {
-  const apiKey = (await nativeApi.getOpenaiApiKey())?.trim();
+  const localApiKey = typeof localStorage !== "undefined" ? localStorage.getItem("widget-studio-openai-api-key") : null;
+  const apiKey = (localApiKey || (await nativeApi.getOpenaiApiKey()))?.trim();
   if (!apiKey) {
     throw new DesktopAiError("Add an OpenAI API key in Settings > AI Provider before using chat.", "missing-key");
   }
 
   const settings = useAiProviderStore.getState();
   const { baseUrl, model } = validateSettings(settings);
-  const client = new OpenAI({
-    apiKey,
-    baseURL: baseUrl,
-    timeout: settings.timeoutSeconds * 1000,
-    dangerouslyAllowBrowser: true,
-  });
-
   try {
+    if (isTauri) {
+      return await nativeApi.completeAiChat({
+        api_key: apiKey,
+        base_url: baseUrl,
+        model,
+        messages: [
+          { role: "system", text: persona === "motivator" ? "You are a high-energy motivational assistant. Help the user get things done with practical, encouraging advice." : persona === "joker" ? "You are a developer joker. Respond with concise coding jokes or developer humor." : persona === "coder" ? "You are a coding partner. Help the user write clean, optimized code and resolve bugs." : "You are a helpful companion for Widget Studio. Help the user manage clocks, weather, notes, and desktop widgets." },
+          ...messages.slice(-20),
+        ],
+        max_tokens: settings.maxTokens,
+        temperature: settings.temperature,
+        reasoning_effort: reasoningEffort,
+        timeout_seconds: settings.timeoutSeconds,
+      });
+    }
+
+    const client = new OpenAI({ apiKey, baseURL: baseUrl, timeout: settings.timeoutSeconds * 1000, dangerouslyAllowBrowser: true });
     const response = await client.chat.completions.create({
       model,
       messages: [
@@ -102,4 +113,3 @@ export async function completeDesktopChat(
     throw describeProviderError(error);
   }
 }
-

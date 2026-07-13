@@ -55,6 +55,7 @@ pub fn run() {
             commands::get_openai_api_key,
             commands::set_openai_api_key,
             commands::delete_openai_api_key
+            ,commands::complete_ai_chat
         ])
         .setup(|app| {
             #[cfg(any(target_os = "windows", target_os = "linux"))]

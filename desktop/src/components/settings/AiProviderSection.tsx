@@ -11,7 +11,18 @@ export function AiProviderSection() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void nativeApi.getOpenaiApiKey().then((key) => setHasApiKey(Boolean(key))).catch(() => setHasApiKey(false));
+    const localKey = localStorage.getItem("widget-studio-openai-api-key") ?? "";
+    if (localKey) {
+      setApiKey(localKey);
+      setHasApiKey(true);
+      return;
+    }
+    void nativeApi.getOpenaiApiKey().then((key) => {
+      if (key) {
+        setApiKey(key);
+        setHasApiKey(true);
+      }
+    }).catch(() => setHasApiKey(false));
   }, []);
 
   const save = async () => {
@@ -19,8 +30,8 @@ export function AiProviderSection() {
     setError("");
     try {
       if (apiKey.trim()) {
+        localStorage.setItem("widget-studio-openai-api-key", apiKey.trim());
         await nativeApi.setOpenaiApiKey(apiKey.trim());
-        setApiKey("");
         setHasApiKey(true);
       }
       aiSettings.setSettings({ baseUrl: normalizeBaseUrl(aiSettings.baseUrl) });
@@ -35,6 +46,8 @@ export function AiProviderSection() {
     setError("");
     try {
       await nativeApi.deleteOpenaiApiKey();
+      localStorage.removeItem("widget-studio-openai-api-key");
+      setApiKey("");
       setHasApiKey(false);
       setMessage("OpenAI API key cleared.");
     } catch (reason) {
@@ -45,14 +58,14 @@ export function AiProviderSection() {
   return (
     <section className="border-t border-black/10 pt-5 dark:border-white/10">
       <div className="flex items-center gap-2 text-sm font-semibold"><KeyRound size={16} /> AI Provider</div>
-      <p className="mt-1 text-xs leading-relaxed text-muted">The API key is stored in Windows Credential Manager and is never included in layout sync.</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted">The API key is shown and saved locally on this device. It is never included in layout sync.</p>
       <div className="mt-4 grid grid-cols-2 gap-4">
-        <label className="developer-field"><span>OpenAI API key</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? "Saved securely" : "sk-..."} autoComplete="off" /></label>
+        <label className="developer-field"><span>OpenAI API key</span><input type="text" value={apiKey} onChange={(event) => { setApiKey(event.target.value); setHasApiKey(Boolean(event.target.value.trim())); }} placeholder="sk-..." autoComplete="off" /></label>
         <label className="developer-field"><span>Base URL</span><input type="url" value={aiSettings.baseUrl} onChange={(event) => aiSettings.setSettings({ baseUrl: event.target.value })} /></label>
         <label className="developer-field"><span>Model</span><input type="text" value={aiSettings.model} onChange={(event) => aiSettings.setSettings({ model: event.target.value })} /></label>
-        <label className="developer-field"><span>Max output tokens</span><input type="number" min="1" max="32768" value={aiSettings.maxTokens} onChange={(event) => aiSettings.setSettings({ maxTokens: Number(event.target.value) })} /></label>
-        <label className="developer-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={aiSettings.temperature} onChange={(event) => aiSettings.setSettings({ temperature: Number(event.target.value) })} /></label>
-        <label className="developer-field"><span>Timeout seconds</span><input type="number" min="1" max="300" value={aiSettings.timeoutSeconds} onChange={(event) => aiSettings.setSettings({ timeoutSeconds: Number(event.target.value) })} /></label>
+        <label className="developer-field"><span>Max output tokens</span><input type="number" min="1" max="32768" value={aiSettings.maxTokens} onChange={(event) => aiSettings.setSettings({ maxTokens: Math.min(32768, Math.max(1, Number(event.target.value) || 1)) })} /></label>
+        <label className="developer-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={aiSettings.temperature} onChange={(event) => aiSettings.setSettings({ temperature: Math.min(2, Math.max(0, Number(event.target.value) || 0)) })} /></label>
+        <label className="developer-field"><span>Timeout seconds</span><input type="number" min="1" max="300" value={aiSettings.timeoutSeconds} onChange={(event) => aiSettings.setSettings({ timeoutSeconds: Math.min(300, Math.max(1, Number(event.target.value) || 1)) })} /></label>
       </div>
       <div className="mt-4 flex items-center gap-2">
         <button type="button" onClick={() => void save()} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white"><Save size={13} /> Save</button>
@@ -64,4 +77,3 @@ export function AiProviderSection() {
     </section>
   );
 }
-

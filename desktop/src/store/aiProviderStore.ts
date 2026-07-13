@@ -26,10 +26,20 @@ const STORAGE_KEY = "widget-studio-ai-provider-settings";
 function readSettings(): AiProviderSettings {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<AiProviderSettings> | null;
-    return { ...DEFAULT_AI_PROVIDER_SETTINGS, ...(stored ?? {}) };
+    return normalizeSettings({ ...DEFAULT_AI_PROVIDER_SETTINGS, ...(stored ?? {}) });
   } catch {
     return DEFAULT_AI_PROVIDER_SETTINGS;
   }
+}
+
+function normalizeSettings(settings: AiProviderSettings): AiProviderSettings {
+  return {
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    maxTokens: Math.min(32768, Math.max(1, Number.isFinite(settings.maxTokens) ? Math.round(settings.maxTokens) : DEFAULT_AI_PROVIDER_SETTINGS.maxTokens)),
+    temperature: Math.min(2, Math.max(0, Number.isFinite(settings.temperature) ? settings.temperature : DEFAULT_AI_PROVIDER_SETTINGS.temperature)),
+    timeoutSeconds: Math.min(300, Math.max(1, Number.isFinite(settings.timeoutSeconds) ? Math.round(settings.timeoutSeconds) : DEFAULT_AI_PROVIDER_SETTINGS.timeoutSeconds)),
+  };
 }
 
 function persistSettings(settings: AiProviderSettings): void {
@@ -43,7 +53,7 @@ function persistSettings(settings: AiProviderSettings): void {
 export const useAiProviderStore = create<AiProviderStore>((set) => ({
   ...readSettings(),
   setSettings: (settings) => set((state) => {
-    const next = { ...state, ...settings };
+    const next = normalizeSettings({ ...state, ...settings });
     const persisted = {
       baseUrl: next.baseUrl,
       model: next.model,
@@ -55,8 +65,9 @@ export const useAiProviderStore = create<AiProviderStore>((set) => ({
     return persisted;
   }),
   syncSettings: (settings) => {
-    persistSettings(settings);
-    set(settings);
+    const normalized = normalizeSettings(settings);
+    persistSettings(normalized);
+    set(normalized);
   },
 }));
 
@@ -65,4 +76,3 @@ export function normalizeBaseUrl(value: string): string {
   if (!trimmed) return DEFAULT_AI_PROVIDER_SETTINGS.baseUrl;
   return trimmed.replace(/\/chat\/completions$/i, "");
 }
-

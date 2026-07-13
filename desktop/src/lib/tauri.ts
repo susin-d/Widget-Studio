@@ -9,6 +9,17 @@ export interface SystemInfo {
   battery_level?: number | null;
 }
 
+export interface NativeAiChatRequest {
+  api_key: string;
+  base_url: string;
+  model: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; text: string }>;
+  max_tokens: number;
+  temperature: number;
+  reasoning_effort: string;
+  timeout_seconds: number;
+}
+
 export const isTauri = "__TAURI_INTERNALS__" in window;
 
 export async function callTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -41,4 +52,5 @@ export const nativeApi = {
   getOpenaiApiKey: () => callTauri<string | null>("get_openai_api_key"),
   setOpenaiApiKey: (apiKey: string) => callTauri<void>("set_openai_api_key", { apiKey }),
   deleteOpenaiApiKey: () => callTauri<void>("delete_openai_api_key")
+  ,completeAiChat: (request: NativeAiChatRequest) => callTauri<string>("complete_ai_chat", { request })
 };
