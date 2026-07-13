@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import type { DesktopWidget, ThemeMode, WidgetBackground } from "../../types/widget";
-import { nativeApi } from "../../lib/tauri";
+import { isTauri, nativeApi } from "../../lib/tauri";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWidgetStore } from "../../store/widgetStore";
 import { CalendarWidget } from "../widgets/CalendarWidget";
@@ -175,7 +175,7 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
           <GripHorizontal size={16} />
         </button>
       )}
-      {!isDesktopWidget && (
+      {!isDesktopWidget && isTauri && (
         <header className="mb-3 flex items-center justify-between gap-2">
           <input
             value={widget.name}
@@ -190,7 +190,7 @@ export function WidgetFrame({ widget, overlay = false, selected = false, onSelec
       <div className={`${isDesktopWidget ? "h-auto w-max overflow-visible" : "h-[calc(100%-36px)] overflow-hidden"}`} style={{ fontSize: widget.settings.fontSize }}>
         <WidgetBody widget={widget} />
       </div>
-      {!isDesktopWidget && <div className="absolute right-2 top-11 hidden rounded-lg bg-panel/95 p-1 shadow-win group-hover:flex">
+      {!isDesktopWidget && isTauri && <div className="absolute right-2 top-11 hidden rounded-lg bg-panel/95 p-1 shadow-win group-hover:flex">
         <IconAction label="Duplicate" icon={<Copy size={14} />} onClick={() => duplicateWidget(widget.id)} />
         <IconAction
           label="Open as desktop widget"

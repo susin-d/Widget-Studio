@@ -28,6 +28,8 @@ Create a `.env` file in the `server` directory to configure environment variable
 
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:yourpassword@localhost:5432/widgets
+# Local-only one-off schema bootstrap. Keep false on Vercel.
+AUTO_CREATE_SCHEMA=true
 
 # Secret key for JWT generation
 SECRET_KEY=generate-a-secure-random-secret-key-for-jwt
@@ -36,6 +38,8 @@ SECRET_KEY=generate-a-secure-random-secret-key-for-jwt
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+DEEP_LINK_REDIRECT=widgetapp://auth/callback
+WEB_AUTH_REDIRECT_URI=http://localhost:5173/auth/callback
 
 # AI chatbot used by the Chatbot widget
 OPENAI_API_KEY=your-provider-api-key
@@ -53,10 +57,21 @@ messages. If the AI configuration is missing, the endpoint returns `503` and
 the widget uses its local offline response path.
 
 ### 5. Running the Server
-Launch the server using uvicorn:
+From the repository root, launch the server using uvicorn:
 
 ```powershell
+cd ..
 python -m uvicorn server.main:app --reload --port 8000
 ```
 
 The API docs will be interactive and accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+To bootstrap a fresh configured database explicitly, run this once from the repository root:
+
+```powershell
+python -m server.init_db
+```
+
+## Vercel
+
+The repository root contains `api/index.py`, `requirements.txt`, `.python-version`, and `vercel.json` for Vercel’s Python runtime. Deploy from the repository root so Vercel can build both the `website/` Vite app and the FastAPI function. Configure `DATABASE_URL`, `SECRET_KEY`, `GOOGLE_REDIRECT_URI`, and `WEB_AUTH_REDIRECT_URI` in the Vercel project settings, then run `python -m server.init_db` once against that external database. Keep `AUTO_CREATE_SCHEMA=false` in production; Vercel function instances do not provide persistent local storage and can start concurrently.

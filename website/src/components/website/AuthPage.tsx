@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Cloud, Check, Loader2, Sparkles, AlertCircle } from "lucide-react";
-import { useAuthStore } from "../../store/authStore";
+import { Cloud, Check, Loader2, Sparkles, AlertCircle, Chrome } from "lucide-react";
+import { BACKEND_URL, useAuthStore } from "../../store/authStore";
 import { useRouteStore } from "../../store/routeStore";
 
 export function AuthPage() {
@@ -38,6 +38,10 @@ export function AuthPage() {
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to authenticate. Please check connection.");
     }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.assign(`${BACKEND_URL}/api/auth/google?client=web`);
   };
 
   const perks = [
@@ -162,6 +166,21 @@ export function AuthPage() {
               )}
             </button>
           </form>
+
+          <div className="my-5 flex items-center gap-2">
+            <hr className="flex-1 border-white/10" />
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">or</span>
+            <hr className="flex-1 border-white/10" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-white/10"
+          >
+            <Chrome size={14} className="text-red-400" />
+            Continue with Google
+          </button>
 
           <div className="text-center mt-6">
             <button

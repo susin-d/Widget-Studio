@@ -27,6 +27,7 @@ class TokenResponse(BaseModel):
 class LayoutSyncRequest(BaseModel):
     widgets: List[Dict[str, Any]]
     settings: Dict[str, Any]
+    updated_at: Optional[datetime] = None
 
 class LayoutSyncResponse(BaseModel):
     widgets: List[Dict[str, Any]]

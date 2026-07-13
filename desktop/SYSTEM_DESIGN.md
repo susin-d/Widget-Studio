@@ -29,7 +29,7 @@ flowchart TB
 
     subgraph Desktop Protocol Handler
         GoogleOAuth -->|Redirect Code| FastAPI
-        FastAPI -->|Deep Link protocol widget-studio://auth| RustHost
+        FastAPI -->|Deep Link protocol widgetapp://auth/callback| RustHost
         RustHost -->|Inject Token| UI
     end
 ```
@@ -162,9 +162,9 @@ sequenceDiagram
 ## Native Implementation Details
 
 ### Custom Deep Link Protocol
-Tauri registers the `widget-studio://` custom protocol handler.
+Tauri registers the `widgetapp://` custom protocol handler.
 1. When a user clicks **Login with Google** in the desktop client, the browser navigates to the FastAPI login.
-2. The server processes the authorization and redirects to `widget-studio://auth?token=<jwt>&email=<email>`.
+2. The server processes the authorization and redirects to `widgetapp://auth/callback?token=<jwt>&email=<email>`.
 3. The native Tauri application intercepts the protocol command, reads the arguments, and injects the session credentials back into the Zustand authentication store.
 
 ### Zero Console Popup Strategy

@@ -5,6 +5,8 @@ export interface UserSession {
   email: string | null;
 }
 
+export type SessionSource = "login" | "signup" | "oauth";
+
 interface AuthStore {
   token: string | null;
   email: string | null;
@@ -12,9 +14,11 @@ interface AuthStore {
   error: string | null;
   syncStatus: "synced" | "syncing" | "error" | "offline";
   lastSyncedAt: string | null;
+  sessionVersion: number;
+  sessionSource: SessionSource | null;
   
   initialize: () => void;
-  setSession: (token: string, email: string) => void;
+  setSession: (token: string, email: string, source?: SessionSource) => void;
   login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
   logout: () => void;
@@ -22,7 +26,11 @@ interface AuthStore {
   setLastSyncedAt: (time: string | null) => void;
 }
 
-export const BACKEND_URL = "http://localhost:8000";
+const configuredBackendUrl = import.meta.env.VITE_BACKEND_URL?.trim();
+
+// The deployed website and API share an origin on Vercel. Keep local Vite
+// development pointed at the standalone Uvicorn server when no override exists.
+export const BACKEND_URL = configuredBackendUrl ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
   token: null,
@@ -31,6 +39,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   error: null,
   syncStatus: "offline",
   lastSyncedAt: null,
+  sessionVersion: 0,
+  sessionSource: null,
 
   initialize: () => {
     const savedToken = localStorage.getItem("widget-studio-token");
@@ -40,10 +50,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  setSession: (token, email) => {
+  setSession: (token, email, source = "oauth") => {
     localStorage.setItem("widget-studio-token", token);
     localStorage.setItem("widget-studio-email", email);
-    set({ token, email, error: null, syncStatus: "synced" });
+    set((state) => ({
+      token,
+      email,
+      error: null,
+      syncStatus: "synced",
+      sessionVersion: state.sessionVersion + 1,
+      sessionSource: source
+    }));
   },
 
   login: async (email, password) => {
@@ -58,7 +75,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (!response.ok) {
         throw new Error(data.detail || "Authentication failed");
       }
-      get().setSession(data.access_token, data.email);
+      get().setSession(data.access_token, data.email, "login");
     } catch (err: any) {
       set({ error: err.message || "Something went wrong" });
       throw err;
@@ -79,7 +96,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (!response.ok) {
         throw new Error(data.detail || "Signup failed");
       }
-      get().setSession(data.access_token, data.email);
+      get().setSession(data.access_token, data.email, "signup");
     } catch (err: any) {
       set({ error: err.message || "Something went wrong" });
       throw err;
@@ -91,7 +108,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   logout: () => {
     localStorage.removeItem("widget-studio-token");
     localStorage.removeItem("widget-studio-email");
-    set({ token: null, email: null, error: null, syncStatus: "offline", lastSyncedAt: null });
+    set({ token: null, email: null, error: null, syncStatus: "offline", lastSyncedAt: null, sessionSource: null });
   },
 
   setSyncStatus: (syncStatus) => set({ syncStatus }),

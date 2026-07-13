@@ -1,6 +1,6 @@
 import { CalendarDays, CheckSquare, Clock, CloudSun, Code2, Copy, Cpu, EyeOff, Link, NotebookPen, Pin, Plus, Settings, Trash2, GitFork, Timer, Globe, StickyNote, Calculator, Bot } from "lucide-react";
 import type { ReactNode } from "react";
-import { nativeApi } from "../../lib/tauri";
+import { isTauri, nativeApi } from "../../lib/tauri";
 import { useWidgetStore } from "../../store/widgetStore";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
 import { Button } from "../ui/Button";
@@ -36,6 +36,7 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
   const updateWidget = useWidgetStore((state) => state.updateWidget);
 
   const openOverlay = (widget: DesktopWidget) => {
+    if (!isTauri) return;
     updateWidget(widget.id, { pinned: true, locked: true });
     onSelectWidget(widget.id);
     void nativeApi.openWidgetWindow(widget.id, widget.rect.x, widget.rect.y, widget.rect.width, widget.rect.height).catch(() => undefined);
@@ -110,8 +111,8 @@ export function WidgetGallery({ selectedWidgetId, onSelectWidget, onSettings, on
                     {widget.pinned && <Pin size={11} className="shrink-0 text-accent/70" />}
                     {/* Quick-action icons appear on hover */}
                     <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                      <IconButton label="Open overlay" onClick={() => openOverlay(widget)} icon={<Pin size={12} />} />
-                      <IconButton label="Hide overlay" onClick={() => { updateWidget(widget.id, { pinned: false, locked: false }); void nativeApi.closeWidgetWindow(widget.id).catch(() => undefined); }} icon={<EyeOff size={12} />} />
+                      {isTauri && <IconButton label="Open overlay" onClick={() => openOverlay(widget)} icon={<Pin size={12} />} />}
+                      {isTauri && <IconButton label="Hide overlay" onClick={() => { updateWidget(widget.id, { pinned: false, locked: false }); void nativeApi.closeWidgetWindow(widget.id).catch(() => undefined); }} icon={<EyeOff size={12} />} />}
                        <IconButton label="Duplicate" onClick={() => duplicateWidget(widget.id)} icon={<Copy size={12} />} />
                       {widget.type === "custom" && onOpenDeveloper && <IconButton label="Edit in builder" onClick={() => onOpenDeveloper(widget.id)} icon={<Code2 size={12} />} />}
                       <IconButton label="Delete" danger onClick={() => removeEverywhere(widget.id)} icon={<Trash2 size={12} />} />

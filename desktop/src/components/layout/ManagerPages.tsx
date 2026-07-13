@@ -40,7 +40,7 @@ function SyncPage({ widgets, settings, onSetWidgets }: { widgets: DesktopWidget[
   };
 
   const handleGoogleLogin = async () => {
-    const url = `${BACKEND_URL}/api/auth/google`;
+    const url = `${BACKEND_URL}/api/auth/google?client=desktop`;
     if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
       try {
         const { open } = await import("@tauri-apps/plugin-shell");
@@ -54,9 +54,14 @@ function SyncPage({ widgets, settings, onSetWidgets }: { widgets: DesktopWidget[
   };
 
   const handleSyncNow = async () => {
+    setFormError("");
     try {
       const state = { version: 2, widgets, settings };
-      await savePersistedState(state);
+      const synced = await savePersistedState(state);
+      if (!synced) {
+        setFormError("Cloud sync failed. Check the sync status and try again.");
+        return;
+      }
       setSuccessMsg("Synchronized with cloud!");
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
@@ -207,6 +212,7 @@ function SyncPage({ widgets, settings, onSetWidgets }: { widgets: DesktopWidget[
 
 function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopWidget[]; onOpenWidgets: () => void; onSetWidgets?: (widgets: DesktopWidget[]) => void }) {
   const { backup, restoreBackup, lastBackup, notices } = useManagerStore();
+  const { token, syncStatus, lastSyncedAt } = useAuthStore();
   const [sysCpu, setSysCpu] = useState<number | null>(null);
   const [sysRam, setSysRam] = useState<number | null>(null);
 
@@ -254,7 +260,7 @@ function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopW
       <Panel title="Recently edited" action="View all"><div className="grid grid-cols-3 gap-3">{widgets.slice(0,3).map((w,i) => <button key={w.id} onClick={onOpenWidgets} className="recent-card"><div className={`preview-orb orb-${i}`} /><div className="mt-3 flex items-center"><div><div className="text-sm font-semibold">{w.name}</div><div className="text-[11px] text-muted">Edited recently</div></div><MoreHorizontal size={15} className="ml-auto text-muted" /></div></button>)}</div></Panel>
       <Panel title="Recent activity"><div className="space-y-3">{activityList.map((x,i)=><div key={x} className="flex items-center gap-3 text-sm"><span className="activity-check"><Check size={11}/></span><span>{x}</span><span className="ml-auto text-[11px] text-muted">{i+2}m</span></div>)}</div></Panel>
     </div>
-    <div className="mt-4 grid grid-cols-3 gap-4">
+     <div className="mt-4 grid grid-cols-3 gap-4">
       <Panel title="Quick actions">
         <div className="grid grid-cols-2 gap-2">
           <Quick label="Backup now" icon={<Cloud/>} onClick={handleBackup}/>
@@ -263,7 +269,7 @@ function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopW
           <Quick label="Import layout" icon={<Download/>} onClick={() => alert("Navigate to Desktop Layouts to import/export presets.")}/>
         </div>
       </Panel>
-      <Panel title="Sync status"><div className="sync-hero"><Cloud size={30}/><div><b>All changes synced</b><p>Local Store · Active</p></div></div></Panel>
+       <Panel title="Sync status"><div className="sync-hero"><Cloud size={30}/><div><b>{!token ? "Local only" : syncStatus === "synced" ? "All changes synced" : `Cloud sync ${syncStatus}`}</b><p>{!token ? "Sign in to sync" : lastSyncedAt ? `Last sync ${lastSyncedAt}` : "Cloud account connected"}</p></div></div></Panel>
       <Panel title="Last backup"><div className="sync-hero"><HardDrive size={30}/><div><b>{lastBackup ? new Date(lastBackup).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "No backups"}</b><p>{lastBackup ? new Date(lastBackup).toLocaleDateString() : "Save preset to protect state"}</p></div></div></Panel>
     </div>
   </Page>;

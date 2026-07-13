@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
-from datetime import timedelta
-from urllib.parse import urlencode
+from datetime import datetime, timedelta, timezone
+import secrets
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
+import jwt
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,8 +19,11 @@ from server.ai import complete_chat
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Automatically create database tables on startup
-    Base.metadata.create_all(bind=engine)
+    # Schema creation is opt-in. Vercel functions can cold-start concurrently,
+    # so production schema changes should be applied by a migration or a one-off
+    # database job rather than on every function startup.
+    if settings.AUTO_CREATE_SCHEMA:
+        Base.metadata.create_all(bind=engine)
     yield
 
 app = FastAPI(
@@ -36,6 +41,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/health", include_in_schema=False)
+def health_check():
+    return {"status": "ok"}
+
+
+def _append_query_params(url: str, params: dict[str, str]) -> str:
+    """Add OAuth parameters before a URL fragment such as ``#auth``."""
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 @app.post("/api/auth/signup", response_model=TokenResponse)
 async def signup(payload: UserCreate, db: Session = Depends(get_db)):
@@ -70,30 +88,46 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
     return TokenResponse(access_token=access_token, email=user.email)
 
 @app.get("/api/auth/google")
-def google_login():
+def google_login(client: str = "desktop"):
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google Client ID is not configured on the backend."
         )
+    if client not in {"desktop", "web"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported OAuth client.")
+
+    oauth_state = create_access_token(
+        data={"oauth_client": client, "nonce": secrets.token_urlsafe(16)},
+        expires_delta=timedelta(minutes=10),
+    )
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
-        "prompt": "select_account"
+        "prompt": "select_account",
+        "state": oauth_state,
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return RedirectResponse(url)
 
 @app.get("/api/auth/google/callback")
-async def google_callback(code: str, db: Session = Depends(get_db)):
+async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth configuration is incomplete."
         )
+
+    try:
+        state_payload = jwt.decode(state, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        oauth_client = state_payload.get("oauth_client")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state.")
+    if oauth_client not in {"desktop", "web"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported OAuth client.")
 
     async with httpx.AsyncClient() as client:
         # Exchange authorization code for token
@@ -134,7 +168,11 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 
         # Create session token
         jwt_token = create_access_token(data={"sub": email})
-        redirect_url = f"{settings.DEEP_LINK_REDIRECT}?token={jwt_token}&email={email}"
+        redirect_target = settings.WEB_AUTH_REDIRECT_URI if oauth_client == "web" else settings.DEEP_LINK_REDIRECT
+        redirect_url = _append_query_params(
+            redirect_target,
+            {"token": jwt_token, "email": email},
+        )
 
         # Serve a modern web page that auto-opens the custom protocol link
         html_content = f"""
@@ -252,6 +290,18 @@ async def update_layout(
     if not layout:
         layout = Layout(user_id=user.id)
         db.add(layout)
+    elif payload.updated_at and layout.updated_at:
+        current_updated_at = layout.updated_at
+        requested_updated_at = payload.updated_at
+        if current_updated_at.tzinfo is None:
+            current_updated_at = current_updated_at.replace(tzinfo=timezone.utc)
+        if requested_updated_at.tzinfo is None:
+            requested_updated_at = requested_updated_at.replace(tzinfo=timezone.utc)
+        if abs((current_updated_at - requested_updated_at).total_seconds()) > 0.001:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Layout changed on another device. Reload the cloud layout before saving again.",
+            )
     
     layout.widgets = payload.widgets
     layout.settings = payload.settings

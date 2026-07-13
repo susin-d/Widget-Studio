@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppWindow, EyeOff, Grid3X3, Moon, Pin, Redo2, RotateCcw, Search, Undo2 } from "lucide-react";
-import { loadPersistedState, savePersistedState } from "./lib/storage";
+import { loadPersistedState, resetCloudSyncCursor, savePersistedState } from "./lib/storage";
 import { nativeApi } from "./lib/tauri";
 import { useSettingsStore } from "./store/settingsStore";
 import { createWidget, useWidgetStore } from "./store/widgetStore";
@@ -19,6 +19,7 @@ import { openWidgetOverlay, closeWidgetOverlay } from "./lib/widgetActions";
 import { useAuthStore } from "./store/authStore";
 import { isTauri } from "./lib/tauri";
 import { useRouteStore } from "./store/routeStore";
+import type { PersistedState } from "./types/widget";
 import { WebHeader } from "./components/website/WebHeader";
 import { WebFooter } from "./components/website/WebFooter";
 import { LandingPage } from "./components/website/LandingPage";
@@ -38,12 +39,12 @@ export default function App() {
   const [developerWidgetId, setDeveloperWidgetId] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
 
-  const reportError = (error: any, context: string) => {
+  const reportError = useCallback((error: any, context: string) => {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`Error during ${context}:`, error);
     setErrorToast(`Action Failed (${context}): ${msg}`);
     setTimeout(() => setErrorToast(null), 5000);
-  };
+  }, []);
   const widgets = useWidgetStore((state) => state.widgets);
   const addWidget = useWidgetStore((state) => state.addWidget);
   const hydrate = useWidgetStore((state) => state.hydrate);
@@ -60,42 +61,65 @@ export default function App() {
   const persisted = useMemo(() => ({ version: 2, widgets, settings }), [widgets, settings]);
   const isWidgetWindow = Boolean(widgetWindowId);
   const selectedWidget = widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
+  const { currentRoute, setRoute } = useRouteStore();
+  const token = useAuthStore((state) => state.token);
+  const sessionVersion = useAuthStore((state) => state.sessionVersion);
+  const sessionSource = useAuthStore((state) => state.sessionSource);
+  const initialStateLoaded = useRef(false);
+  const handledSessionVersion = useRef(0);
+
+  const applyLoadedState = useCallback((state: PersistedState) => {
+    const restoredSettings = state.version < 2 ? { ...state.settings, launchOnStartup: true } : state.settings;
+    const restoredWidgets = (!isWidgetWindow && state.widgets.length === 0 && !restoredSettings.onboardingComplete)
+      ? [createWidget("clock"), createWidget("todo", 1)]
+      : state.widgets;
+
+    hydrate({ ...state, version: 2, widgets: restoredWidgets, settings: restoredSettings });
+    setSettings(restoredSettings);
+    if (!isWidgetWindow && restoredWidgets.length > 0) setSelectedWidgetId(restoredWidgets[0].id);
+
+    if (!isWidgetWindow) {
+      if (restoredSettings.launchOnStartup) {
+        void nativeApi.setStartup(true).catch((error) => reportError(error, "launch on startup"));
+      }
+
+      if (restoredSettings.restoreWidgetsOnLaunch) {
+        window.setTimeout(() => {
+          restoredWidgets
+            .filter((widget) => widget.pinned)
+            .forEach((widget) => {
+              void nativeApi
+                .openWidgetWindow(widget.id, widget.rect.x, widget.rect.y, widget.rect.width, widget.rect.height)
+                .catch((error) => reportError(error, `restore widget overlay "${widget.name}"`));
+            });
+        }, 500);
+      }
+    }
+  }, [hydrate, isWidgetWindow, reportError, setSettings]);
 
   // Initialize auth session and load state
   useEffect(() => {
     useAuthStore.getState().initialize();
-    
     loadPersistedState().then((state) => {
-      const restoredSettings = state.version < 2 ? { ...state.settings, launchOnStartup: true } : state.settings;
-      
-      // If the user already finished onboarding, we respect their choice of having 0 widgets
-      const restoredWidgets = (!isWidgetWindow && state.widgets.length === 0 && !restoredSettings.onboardingComplete)
-        ? [createWidget("clock"), createWidget("todo", 1)]
-        : state.widgets;
-
-      hydrate({ ...state, version: 2, widgets: restoredWidgets, settings: restoredSettings });
-      setSettings(restoredSettings);
-      if (!isWidgetWindow && restoredWidgets.length > 0) setSelectedWidgetId(restoredWidgets[0].id);
-
-      if (!isWidgetWindow) {
-        if (restoredSettings.launchOnStartup) {
-          void nativeApi.setStartup(true).catch((e) => reportError(e, "launch on startup"));
-        }
-
-        if (state.settings.restoreWidgetsOnLaunch) {
-          window.setTimeout(() => {
-            restoredWidgets
-              .filter((widget) => widget.pinned)
-              .forEach((widget) => {
-                void nativeApi
-                  .openWidgetWindow(widget.id, widget.rect.x, widget.rect.y, widget.rect.width, widget.rect.height)
-                  .catch((e) => reportError(e, `restore widget overlay "${widget.name}"`));
-              });
-          }, 500);
-        }
-      }
+      applyLoadedState(state);
+      initialStateLoaded.current = true;
     });
-  }, [hydrate, isWidgetWindow, setSettings]);
+  }, [applyLoadedState]);
+
+  // Email/password and web OAuth establish a session after the initial load. Pull the
+  // cloud layout for login/OAuth, while a new signup publishes the current local layout.
+  useEffect(() => {
+    if (!initialStateLoaded.current || !token || sessionVersion === handledSessionVersion.current) return;
+    handledSessionVersion.current = sessionVersion;
+
+    if (sessionSource === "signup") {
+      resetCloudSyncCursor();
+      void savePersistedState(persisted);
+      return;
+    }
+
+    void loadPersistedState().then(applyLoadedState);
+  }, [applyLoadedState, persisted, sessionSource, sessionVersion, token]);
 
   // Deep Link handler for OAuth redirects
   useEffect(() => {
@@ -111,12 +135,7 @@ export default function App() {
               const token = urlObj.searchParams.get("token");
               const email = urlObj.searchParams.get("email");
               if (token && email) {
-                useAuthStore.getState().setSession(token, email);
-                // Trigger instant cloud layout loading
-                loadPersistedState().then((state) => {
-                  hydrate(state);
-                  setSettings(state.settings);
-                });
+                useAuthStore.getState().setSession(token, email, "oauth");
               }
             }
           }
@@ -131,6 +150,19 @@ export default function App() {
       if (unlisten) unlisten();
     };
   }, [hydrate, setSettings]);
+
+  // Web OAuth returns to the SPA instead of the desktop deep-link protocol.
+  useEffect(() => {
+    if (isTauri || window.location.pathname !== "/auth/callback") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const email = params.get("email");
+    if (!token || !email) return;
+
+    useAuthStore.getState().setSession(token, email, "oauth");
+    window.history.replaceState({}, document.title, "/");
+    setRoute("dashboard");
+  }, [isTauri, setRoute]);
 
   useEffect(() => {
     let activeTheme = settings.theme;
@@ -233,9 +265,6 @@ export default function App() {
 
   const alignSelection=(axis:"left"|"top"|"horizontal"|"vertical")=>{const chosen=widgets.filter(w=>selectedWidgetIds.includes(w.id));if(chosen.length<2)return;if(axis==="left"){const x=Math.min(...chosen.map(w=>w.rect.x));chosen.forEach(w=>updateRect(w.id,{x}))}else if(axis==="top"){const y=Math.min(...chosen.map(w=>w.rect.y));chosen.forEach(w=>updateRect(w.id,{y}))}else{const sorted=[...chosen].sort((a,b)=>axis==="horizontal"?a.rect.x-b.rect.x:a.rect.y-b.rect.y);const first=axis==="horizontal"?sorted[0].rect.x:sorted[0].rect.y;const last=axis==="horizontal"?sorted[sorted.length-1].rect.x:sorted[sorted.length-1].rect.y;sorted.forEach((w,i)=>updateRect(w.id,axis==="horizontal"?{x:first+(last-first)*i/(sorted.length-1)}:{y:first+(last-first)*i/(sorted.length-1)}))}};
 
-  const { currentRoute, setRoute } = useRouteStore();
-  const token = useAuthStore((state) => state.token);
-
   useEffect(() => {
     if (currentRoute === "dashboard" && !token) {
       setRoute("auth");
@@ -309,8 +338,8 @@ export default function App() {
                         <Button disabled={!canUndo} icon={<Undo2 size={14}/>} onClick={undo}>Undo</Button>
                         <Button disabled={!canRedo} icon={<Redo2 size={14}/>} onClick={redo}>Redo</Button>
                         <div className="mx-1 h-5 w-px bg-black/10 dark:bg-white/10" />
-                        <Button disabled={widgets.length === 0} icon={<Pin size={14} />} onClick={openAll}>Open all</Button>
-                        <Button disabled={widgets.length === 0} icon={<EyeOff size={14} />} onClick={hideAll}>Hide all</Button>
+                         {isTauri && <Button disabled={widgets.length === 0} icon={<Pin size={14} />} onClick={openAll}>Open all</Button>}
+                         {isTauri && <Button disabled={widgets.length === 0} icon={<EyeOff size={14} />} onClick={hideAll}>Hide all</Button>}
                         <Button disabled={widgets.length === 0} icon={<RotateCcw size={14} />} onClick={resetLayout}>Reset</Button>
                       </div>
                     </div>

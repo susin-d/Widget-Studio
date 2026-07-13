@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppWindow, EyeOff, Grid3X3, Moon, Pin, Redo2, RotateCcw, Search, Undo2 } from "lucide-react";
-import { loadPersistedState, savePersistedState } from "./lib/storage";
+import { loadPersistedState, resetCloudSyncCursor, savePersistedState } from "./lib/storage";
 import { nativeApi } from "./lib/tauri";
 import { useSettingsStore } from "./store/settingsStore";
 import { createWidget, useWidgetStore } from "./store/widgetStore";
@@ -17,6 +17,7 @@ import { hexToRgb } from "./lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay } from "./lib/widgetActions";
 
 import { useAuthStore } from "./store/authStore";
+import type { PersistedState } from "./types/widget";
 
 export default function App() {
   const widgetWindowId = new URLSearchParams(window.location.search).get("widget");
@@ -29,12 +30,12 @@ export default function App() {
   const [developerWidgetId, setDeveloperWidgetId] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
 
-  const reportError = (error: any, context: string) => {
+  const reportError = useCallback((error: any, context: string) => {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`Error during ${context}:`, error);
     setErrorToast(`Action Failed (${context}): ${msg}`);
     setTimeout(() => setErrorToast(null), 5000);
-  };
+  }, []);
   const widgets = useWidgetStore((state) => state.widgets);
   const addWidget = useWidgetStore((state) => state.addWidget);
   const hydrate = useWidgetStore((state) => state.hydrate);
@@ -51,42 +52,64 @@ export default function App() {
   const persisted = useMemo(() => ({ version: 2, widgets, settings }), [widgets, settings]);
   const isWidgetWindow = Boolean(widgetWindowId);
   const selectedWidget = widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
+  const token = useAuthStore((state) => state.token);
+  const sessionVersion = useAuthStore((state) => state.sessionVersion);
+  const sessionSource = useAuthStore((state) => state.sessionSource);
+  const initialStateLoaded = useRef(false);
+  const handledSessionVersion = useRef(0);
+
+  const applyLoadedState = useCallback((state: PersistedState) => {
+    const restoredSettings = state.version < 2 ? { ...state.settings, launchOnStartup: true } : state.settings;
+    const restoredWidgets = (!isWidgetWindow && state.widgets.length === 0 && !restoredSettings.onboardingComplete)
+      ? [createWidget("clock"), createWidget("todo", 1)]
+      : state.widgets;
+
+    hydrate({ ...state, version: 2, widgets: restoredWidgets, settings: restoredSettings });
+    setSettings(restoredSettings);
+    if (!isWidgetWindow && restoredWidgets.length > 0) setSelectedWidgetId(restoredWidgets[0].id);
+
+    if (!isWidgetWindow) {
+      if (restoredSettings.launchOnStartup) {
+        void nativeApi.setStartup(true).catch((error) => reportError(error, "launch on startup"));
+      }
+
+      if (restoredSettings.restoreWidgetsOnLaunch) {
+        window.setTimeout(() => {
+          restoredWidgets
+            .filter((widget) => widget.pinned)
+            .forEach((widget) => {
+              void nativeApi
+                .openWidgetWindow(widget.id, widget.rect.x, widget.rect.y, widget.rect.width, widget.rect.height)
+                .catch((error) => reportError(error, `restore widget overlay "${widget.name}"`));
+            });
+        }, 500);
+      }
+    }
+  }, [hydrate, isWidgetWindow, reportError, setSettings]);
 
   // Initialize auth session and load state
   useEffect(() => {
     useAuthStore.getState().initialize();
-    
     loadPersistedState().then((state) => {
-      const restoredSettings = state.version < 2 ? { ...state.settings, launchOnStartup: true } : state.settings;
-      
-      // If the user already finished onboarding, we respect their choice of having 0 widgets
-      const restoredWidgets = (!isWidgetWindow && state.widgets.length === 0 && !restoredSettings.onboardingComplete)
-        ? [createWidget("clock"), createWidget("todo", 1)]
-        : state.widgets;
-
-      hydrate({ ...state, version: 2, widgets: restoredWidgets, settings: restoredSettings });
-      setSettings(restoredSettings);
-      if (!isWidgetWindow && restoredWidgets.length > 0) setSelectedWidgetId(restoredWidgets[0].id);
-
-      if (!isWidgetWindow) {
-        if (restoredSettings.launchOnStartup) {
-          void nativeApi.setStartup(true).catch((e) => reportError(e, "launch on startup"));
-        }
-
-        if (state.settings.restoreWidgetsOnLaunch) {
-          window.setTimeout(() => {
-            restoredWidgets
-              .filter((widget) => widget.pinned)
-              .forEach((widget) => {
-                void nativeApi
-                  .openWidgetWindow(widget.id, widget.rect.x, widget.rect.y, widget.rect.width, widget.rect.height)
-                  .catch((e) => reportError(e, `restore widget overlay "${widget.name}"`));
-              });
-          }, 500);
-        }
-      }
+      applyLoadedState(state);
+      initialStateLoaded.current = true;
     });
-  }, [hydrate, isWidgetWindow, setSettings]);
+  }, [applyLoadedState]);
+
+  // Email/password and web OAuth establish a session after the initial load. Pull the
+  // cloud layout for login/OAuth, while a new signup publishes the current local layout.
+  useEffect(() => {
+    if (!initialStateLoaded.current || !token || sessionVersion === handledSessionVersion.current) return;
+    handledSessionVersion.current = sessionVersion;
+
+    if (sessionSource === "signup") {
+      resetCloudSyncCursor();
+      void savePersistedState(persisted);
+      return;
+    }
+
+    void loadPersistedState().then(applyLoadedState);
+  }, [applyLoadedState, persisted, sessionSource, sessionVersion, token]);
 
   // Deep Link handler for OAuth redirects
   useEffect(() => {
@@ -102,12 +125,7 @@ export default function App() {
               const token = urlObj.searchParams.get("token");
               const email = urlObj.searchParams.get("email");
               if (token && email) {
-                useAuthStore.getState().setSession(token, email);
-                // Trigger instant cloud layout loading
-                loadPersistedState().then((state) => {
-                  hydrate(state);
-                  setSettings(state.settings);
-                });
+                useAuthStore.getState().setSession(token, email, "oauth");
               }
             }
           }

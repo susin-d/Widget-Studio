@@ -54,7 +54,7 @@ export function LandingPage() {
       <section className="relative max-w-6xl mx-auto pt-20 pb-16 px-6 text-center space-y-8">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-indigo-300 font-medium">
           <Sparkles size={12} className="animate-pulse" />
-          Introducing Widget Studio v1.0.0 for Windows
+          Introducing Widget Studio v0.1.0 for Windows
         </div>
 
         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto">

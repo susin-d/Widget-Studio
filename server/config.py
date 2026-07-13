@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/widgets"
+    AUTO_CREATE_SCHEMA: bool = False
 
     # Security
     SECRET_KEY: str = "your-super-secret-key-change-in-production"
@@ -14,6 +17,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
     DEEP_LINK_REDIRECT: str = "widgetapp://auth/callback"
+    WEB_AUTH_REDIRECT_URI: str = "http://localhost:5173/auth/callback"
 
     # OpenAI
     OPENAI_API_KEY: str = ""
@@ -24,7 +28,7 @@ class Settings(BaseSettings):
     AI_TIMEOUT_SECONDS: float = 30.0
 
     class Config:
-        env_file = ".env"
+        env_file = Path(__file__).with_name(".env")
         env_file_encoding = "utf-8"
 
 settings = Settings()

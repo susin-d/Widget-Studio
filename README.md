@@ -114,6 +114,7 @@ pip install -r requirements.txt
 copy .env.example .env  # Or create one manually with DATABASE_URL, SECRET_KEY, and Google OAuth credentials
 
 # Start FastAPI
+cd ..
 python -m uvicorn server.main:app --reload --port 8000
 ```
 *API docs will be available at [http://localhost:8000/docs](http://localhost:8000/docs).*
@@ -141,13 +142,49 @@ npm run tauri:dev
 
 ---
 
+## ☁️ Deploying Website and API to Vercel
+
+The repository now deploys as one Vercel project from the repository root:
+
+- `website/` is built with Vite and served from `website/dist`.
+- `api/index.py` exposes the FastAPI app as a Vercel Python Function.
+- `/api/*` keeps the same API paths used by local development and the desktop client.
+
+Create a Vercel project with the repository root as its Root Directory, then add these environment variables in the Vercel dashboard:
+
+```env
+DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<database>
+SECRET_KEY=<long-random-production-secret>
+AUTO_CREATE_SCHEMA=false
+GOOGLE_CLIENT_ID=<google-client-id>
+GOOGLE_CLIENT_SECRET=<google-client-secret>
+GOOGLE_REDIRECT_URI=https://<your-domain>/api/auth/google/callback
+WEB_AUTH_REDIRECT_URI=https://<your-domain>/auth/callback
+OPENAI_API_KEY=<optional>
+```
+
+Use a managed PostgreSQL database for `DATABASE_URL`; Vercel function instances and their local filesystem are ephemeral. Apply the existing schema once before enabling signup or layout sync:
+
+```powershell
+$env:DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>/<database>"
+python -m server.init_db
+```
+
+The public health check is available at `https://<your-domain>/api/health`.
+
+When the website and API share the same Vercel project, leave `VITE_BACKEND_URL` unset (or set it to an empty value); the website uses same-origin `/api` requests in production. For local development, use `VITE_BACKEND_URL=http://localhost:8000`. Add the production callback URL to the Google OAuth client configuration as well.
+
+The committed `vercel.json` runs `npm --prefix website ci`, builds the website, and publishes the `website/dist` output while Vercel discovers the Python function from `api/index.py`.
+
+---
+
 ## 🔒 Authentication & Synchronization Workflow
 
 When a user initiates Google Sign-In:
 1. **Desktop / Website** triggers OAuth request to the FastAPI Server: `/api/auth/google`.
 2. **Server** redirects user to the Google Login consent page.
 3. User completes login; Google redirects back to server callback `/api/auth/google/callback` with authorization code.
-4. **Server** exchanges code for a profile, stores user in db, generates a JWT session token, and opens deep-link `widget-studio://auth?token=...` or redirects back to the website.
-5. **Desktop application** registers the custom protocol (`widget-studio://`) and absorbs the JWT to hydrate state and begin bi-directional synchronization.
+4. **Server** exchanges code for a profile, stores user in db, generates a JWT session token, and redirects desktop OAuth to `widgetapp://auth/callback` or web OAuth to the website callback.
+5. **Desktop application** registers the custom protocol (`widgetapp://`) and absorbs the JWT to hydrate state and begin synchronization.
 # Widget-Studio
 # Widget-Studio

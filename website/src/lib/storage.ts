@@ -2,6 +2,7 @@ import type { AppSettings, PersistedState } from "../types/widget";
 import { nativeApi, isTauri } from "./tauri";
 
 const STORAGE_KEY = "desktop-widgets-state";
+let lastCloudUpdatedAt: string | null = null;
 
 export const defaultSettings: AppSettings = {
   theme: "system",
@@ -27,6 +28,10 @@ export const emptyState = (): PersistedState => ({
   widgets: [],
   settings: defaultSettings
 });
+
+export function resetCloudSyncCursor(): void {
+  lastCloudUpdatedAt = null;
+}
 
 import { useAuthStore, BACKEND_URL } from "../store/authStore";
 
@@ -56,6 +61,7 @@ export async function loadPersistedState(): Promise<PersistedState> {
       if (res.ok) {
         const cloudState = await res.json();
         const sanitizedCloud = sanitize(cloudState);
+        lastCloudUpdatedAt = typeof cloudState.updated_at === "string" ? cloudState.updated_at : null;
         // Sync local storage cache
         if (isTauri) {
           await nativeApi.saveLayout(sanitizedCloud);
@@ -66,6 +72,7 @@ export async function loadPersistedState(): Promise<PersistedState> {
         setLastSyncedAt(new Date().toLocaleTimeString());
         return sanitizedCloud;
       } else if (res.status === 401) {
+        resetCloudSyncCursor();
         logout();
       } else {
         setSyncStatus("error");
@@ -76,11 +83,14 @@ export async function loadPersistedState(): Promise<PersistedState> {
     }
   }
 
+  if (!token) resetCloudSyncCursor();
+
   return localState;
 }
 
-export async function savePersistedState(state: PersistedState): Promise<void> {
+export async function savePersistedState(state: PersistedState): Promise<boolean> {
   const safeState = sanitize(state);
+  let localSaveSucceeded = true;
   
   // 1. Save locally instantly
   try {
@@ -91,37 +101,45 @@ export async function savePersistedState(state: PersistedState): Promise<void> {
     }
   } catch (err) {
     console.error("Local save failed", err);
+    localSaveSucceeded = false;
   }
 
   // 2. Sync to cloud if user is logged in
   const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();
-  if (token) {
-    try {
-      setSyncStatus("syncing");
-      const res = await fetch(`${BACKEND_URL}/api/sync/layout`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          widgets: safeState.widgets,
-          settings: safeState.settings
-        })
-      });
-      if (res.ok) {
-        setSyncStatus("synced");
-        setLastSyncedAt(new Date().toLocaleTimeString());
-      } else if (res.status === 401) {
-        logout();
-      } else {
-        setSyncStatus("error");
-      }
-    } catch (error) {
-      console.warn("Could not save layout to backend", error);
-      setSyncStatus("offline");
+  if (!token) return localSaveSucceeded;
+
+  try {
+    setSyncStatus("syncing");
+    const res = await fetch(`${BACKEND_URL}/api/sync/layout`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        widgets: safeState.widgets,
+        settings: safeState.settings,
+        updated_at: lastCloudUpdatedAt
+      })
+    });
+    if (res.ok) {
+      const savedState = await res.json();
+      lastCloudUpdatedAt = typeof savedState.updated_at === "string" ? savedState.updated_at : lastCloudUpdatedAt;
+      setSyncStatus("synced");
+      setLastSyncedAt(new Date().toLocaleTimeString());
+      return localSaveSucceeded;
+    } else if (res.status === 401) {
+      resetCloudSyncCursor();
+      logout();
+    } else {
+      setSyncStatus("error");
     }
+  } catch (error) {
+    console.warn("Could not save layout to backend", error);
+    setSyncStatus("offline");
   }
+
+  return false;
 }
 
 function sanitize(value: PersistedState): PersistedState {

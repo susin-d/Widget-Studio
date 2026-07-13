@@ -73,7 +73,7 @@ export function DownloadPage() {
             
             <div>
               <h3 className="text-lg font-bold">Widget Studio Setup</h3>
-              <p className="text-[11px] text-slate-500 mt-1">Version 1.0.0 · Windows Installer (x64)</p>
+              <p className="text-[11px] text-slate-500 mt-1">Version 0.1.0 · Windows Installer (x64)</p>
             </div>
 
             <button

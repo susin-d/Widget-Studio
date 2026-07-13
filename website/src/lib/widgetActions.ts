@@ -1,4 +1,4 @@
-import { nativeApi } from "./tauri";
+import { isTauri, nativeApi } from "./tauri";
 import type { DesktopWidget } from "../types/widget";
 
 export type ErrorReporter = (error: any, context: string) => void;
@@ -11,6 +11,7 @@ export async function openWidgetOverlay(
   updateWidget: (id: string, patch: Partial<DesktopWidget>) => void,
   reportError?: ErrorReporter
 ): Promise<void> {
+  if (!isTauri) return;
   updateWidget(widget.id, { pinned: true, locked: true });
   try {
     await nativeApi.openWidgetWindow(
@@ -33,6 +34,7 @@ export async function closeWidgetOverlay(
   updateWidget: (id: string, patch: Partial<DesktopWidget>) => void,
   reportError?: ErrorReporter
 ): Promise<void> {
+  if (!isTauri) return;
   updateWidget(widget.id, { pinned: false, locked: false });
   try {
     await nativeApi.closeWidgetWindow(widget.id);
