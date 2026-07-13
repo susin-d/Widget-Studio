@@ -7,6 +7,7 @@ interface ManagerState {
   layouts: SavedLayout[]; installed: string[]; favorites: string[]; notices: ManagerNotice[]; lastBackup?: string;
   saveLayout: (name: string, widgets: DesktopWidget[]) => void; deleteLayout: (id: string) => void;
   renameLayout: (id: string, name: string) => void;
+  updateLayout: (id: string, widgets: DesktopWidget[]) => void;
   install: (name: string) => void; toggleFavorite: (name: string) => void; addNotice: (message: string) => void;
   markAllRead: () => void; backup: (widgets: DesktopWidget[]) => void; restoreBackup: () => DesktopWidget[] | null;
 }
@@ -18,6 +19,7 @@ export const useManagerStore=create<ManagerState>((set,get)=>({
   saveLayout:(name,widgets)=>set(s=>{const next={...s,layouts:[...s.layouts,{id:crypto.randomUUID(),name,widgets:structuredClone(widgets),updatedAt:new Date().toISOString()}]};persist(next);return next}),
   deleteLayout:id=>set(s=>{const next={...s,layouts:s.layouts.filter(x=>x.id!==id)};persist(next);return next}),
   renameLayout:(id,name)=>set(s=>{const next={...s,layouts:s.layouts.map(x=>x.id===id?{...x,name,updatedAt:new Date().toISOString()}:x)};persist(next);return next}),
+  updateLayout:(id,widgets)=>set(s=>{const next={...s,layouts:s.layouts.map(x=>x.id===id?{...x,widgets:structuredClone(widgets),updatedAt:new Date().toISOString()}:x)};persist(next);return next}),
   install:name=>set(s=>{if(s.installed.includes(name))return s;const next={...s,installed:[...s.installed,name],notices:[{id:crypto.randomUUID(),message:`${name} installed`,createdAt:new Date().toISOString(),read:false},...s.notices]};persist(next);return next}),
   toggleFavorite:name=>set(s=>{const next={...s,favorites:s.favorites.includes(name)?s.favorites.filter(x=>x!==name):[...s.favorites,name]};persist(next);return next}),
   addNotice:message=>set(s=>{const next={...s,notices:[{id:crypto.randomUUID(),message,createdAt:new Date().toISOString(),read:false},...s.notices]};persist(next);return next}),

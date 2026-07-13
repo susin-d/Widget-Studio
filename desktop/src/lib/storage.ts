@@ -3,7 +3,10 @@ import { nativeApi, isTauri } from "./tauri";
 import { useAuthStore, BACKEND_URL } from "../store/authStore";
 
 const STORAGE_KEY = "desktop-widgets-state";
+const CLOUD_REQUEST_TIMEOUT_MS = 15_000;
 let lastCloudUpdatedAt: string | null = null;
+let cloudSyncInFlight: Promise<boolean> | null = null;
+let cloudSyncQueuedState: PersistedState | null = null;
 
 export const defaultSettings: AppSettings = {
   theme: "system",
@@ -62,7 +65,7 @@ export async function loadPersistedState(): Promise<PersistedState> {
   if (token) {
     try {
       setSyncStatus("syncing");
-      const res = await fetch(`${BACKEND_URL}/api/sync/layout`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/sync/layout`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -118,6 +121,25 @@ export async function saveLocalPersistedState(state: PersistedState): Promise<bo
 }
 
 export async function syncPersistedStateToCloud(state: PersistedState): Promise<boolean> {
+  cloudSyncQueuedState = state;
+  if (cloudSyncInFlight) return cloudSyncInFlight;
+
+  cloudSyncInFlight = (async () => {
+    let result = true;
+    while (cloudSyncQueuedState) {
+      const nextState = cloudSyncQueuedState;
+      cloudSyncQueuedState = null;
+      result = await syncPersistedStateToCloudOnce(nextState);
+    }
+    return result;
+  })().finally(() => {
+    cloudSyncInFlight = null;
+    if (cloudSyncQueuedState) void syncPersistedStateToCloud(cloudSyncQueuedState);
+  });
+  return cloudSyncInFlight;
+}
+
+async function syncPersistedStateToCloudOnce(state: PersistedState): Promise<boolean> {
   const safeState = sanitize(state);
 
   const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();
@@ -125,7 +147,7 @@ export async function syncPersistedStateToCloud(state: PersistedState): Promise<
 
   try {
     setSyncStatus("syncing");
-    const res = await fetch(`${BACKEND_URL}/api/sync/layout`, {
+    const res = await fetchWithTimeout(`${BACKEND_URL}/api/sync/layout`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -155,6 +177,16 @@ export async function syncPersistedStateToCloud(state: PersistedState): Promise<
   }
 
   return false;
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function sanitize(value: PersistedState): PersistedState {

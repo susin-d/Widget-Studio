@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CustomWidgetPermission, CustomWidgetPermissions, CustomWidgetSource } from "../../types/customWidget";
 import { CUSTOM_WIDGET_PERMISSIONS } from "../../types/customWidget";
 import { buildCustomWidgetSrcDoc } from "../../lib/customWidget";
+import { isTauri, nativeApi } from "../../lib/tauri";
+import { sendNotification } from "@tauri-apps/plugin-notification";
+import { open } from "@tauri-apps/plugin-shell";
 
 interface CustomWidgetRuntimeProps {
   name: string;
@@ -53,17 +56,21 @@ export function CustomWidgetRuntime({ name, source, permissions, onPermissionsCh
       }
       try {
         if (permissionName === "clipboard") {
-          await navigator.clipboard.writeText(String((payload as { text?: string })?.text ?? ""));
+          const text = String((payload as { text?: string })?.text ?? "");
+          if (isTauri) await nativeApi.copyToClipboard(text);
+          else await navigator.clipboard.writeText(text);
           reply(id, true, true);
         } else if (permissionName === "notifications") {
-          if (Notification.permission === "default") await Notification.requestPermission();
-          if (Notification.permission !== "granted") throw new Error("Notification permission denied");
-          new Notification(String((payload as { title?: string })?.title ?? name), { body: String((payload as { body?: string })?.body ?? "") });
+          const title = String((payload as { title?: string })?.title ?? name);
+          const body = String((payload as { body?: string })?.body ?? "");
+          if (isTauri) await sendNotification({ title, body });
+          else { if (Notification.permission === "default") await Notification.requestPermission(); if (Notification.permission !== "granted") throw new Error("Notification permission denied"); new Notification(title, { body }); }
           reply(id, true, true);
         } else if (permissionName === "openExternal") {
           const url = String((payload as { url?: string })?.url ?? "");
           if (!/^https?:\/\//i.test(url)) throw new Error("Only HTTP(S) URLs are allowed");
-          window.open(url, "_blank", "noopener,noreferrer");
+          if (isTauri) await open(url);
+          else window.open(url, "_blank", "noopener,noreferrer");
           reply(id, true, true);
         } else {
           const request = payload as { url?: string; options?: RequestInit };

@@ -258,6 +258,34 @@ pub fn set_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), String>
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+pub fn copy_to_clipboard(text: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::ptr::copy_nonoverlapping;
+        use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+        use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+        const CF_UNICODETEXT: u32 = 13;
+        let utf16: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            if OpenClipboard(0) == 0 { return Err("Windows clipboard is unavailable".into()); }
+            EmptyClipboard();
+            let bytes = utf16.len() * std::mem::size_of::<u16>();
+            let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
+            if handle.is_null() { CloseClipboard(); return Err("Could not allocate clipboard memory".into()); }
+            let target = GlobalLock(handle) as *mut u16;
+            if target.is_null() { CloseClipboard(); return Err("Could not lock clipboard memory".into()); }
+            copy_nonoverlapping(utf16.as_ptr(), target, utf16.len());
+            GlobalUnlock(handle);
+            if SetClipboardData(CF_UNICODETEXT, handle).is_null() { CloseClipboard(); return Err("Could not set Windows clipboard data".into()); }
+            CloseClipboard();
+            Ok(())
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = text; Err("Native clipboard is only implemented for Windows".into()) }
+}
+
 fn main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     app.get_webview_window("main")
         .ok_or_else(|| "Main window not found".to_string())

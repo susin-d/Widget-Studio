@@ -1,137 +1,124 @@
 # Widget Studio
 
-Widget Studio is a premium, modular, and highly customizable desktop widget host for Windows 11, paired with a cloud-synchronized web dashboard. Built using **Tauri v2, React, TypeScript, Zustand, and Tailwind CSS**, it is backed by a **FastAPI + PostgreSQL** sync server supporting secure email/password registration and Google OAuth.
+[![Release](https://img.shields.io/github/v/release/susin-d/Widget-Studio?display_name=tag)](https://github.com/susin-d/Widget-Studio/releases)
+[![License](https://img.shields.io/badge/license-see%20repository-blue)](https://github.com/susin-d/Widget-Studio)
+[![Issues](https://img.shields.io/github/issues/susin-d/Widget-Studio)](https://github.com/susin-d/Widget-Studio/issues)
 
-The application allows users to create transparent, interactive, and beautifully animated desktop widgets (clocks, weather, system monitors, notes, mindmaps, and more) that sit directly on the desktop surface, persist their states, snap to grids, and synchronize dynamically to the cloud.
+Widget Studio is a Windows 11 desktop widget workspace with a browser-based dashboard and optional cloud synchronization. Build a personal desktop from draggable, resizable widgets, then manage layouts and settings from the web client.
 
----
+The project combines a native Windows application, a Vite web application, and a FastAPI synchronization API in one repository.
 
-## 📂 Repository Structure
+## Highlights
 
-This is a monorepo consisting of three main modules:
+- Native Windows desktop widgets powered by Tauri v2, Rust, React, and TypeScript
+- Draggable, resizable, grid-snapped layouts with locking, pinning, and coordinate memory
+- Windows 11-inspired acrylic and glassmorphism themes
+- Built-in Clock, World Clock, Weather, Notes, Sticky Notepad, Todo, System Monitor, Pomodoro, Calculator, Calendar, Quick Links, Mindmap, and Custom Widget experiences
+- Browser dashboard with local-storage fallbacks for development and offline use
+- Email/password authentication, Google OAuth, JWT sessions, and layout synchronization
+- Optional AI chatbot support through an OpenAI-compatible backend
+- Windows MSI and NSIS packaging with signed updater artifacts through GitHub Releases
+
+## Repository layout
 
 ```text
-widget/
-├── desktop/       # Native Windows 11 desktop application host (Tauri v2 + React)
-├── website/       # Marketing landing page & cloud-based dashboard (Vite + React)
-├── server/        # Synchronizing API backend (FastAPI + PostgreSQL)
-└── assets/        # Static visual assets and icons
+.
+├── desktop/       # Native Windows client: Tauri v2 + React + TypeScript
+├── website/       # Marketing site and browser dashboard: Vite + React
+├── server/        # Sync and authentication API: FastAPI + SQLAlchemy
+├── docs/          # Developer and custom-widget documentation
+├── scripts/       # Windows build and release helper scripts
+└── assets/        # Shared visual assets
 ```
 
----
-
-## 🏗️ Architecture Overview
+## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph "Native Client (desktop)"
-        Tauri[Tauri v2 / Rust Host] <--> ReactDesktop[React App / Zustand]
-        ReactDesktop <--> LocalStorage[Local layout.json]
-    end
-
-    subgraph "Web Client (website)"
-        ReactWeb[React App / Zustand] <--> BrowserStorage[localStorage fallback]
-    end
-
-    subgraph "Backend Server (server)"
-        FastAPI[FastAPI API] <--> PG[(PostgreSQL Database)]
-    end
-
-    ReactDesktop <-->|JWT Layout Sync / Deep Link OAuth| FastAPI
-    ReactWeb <-->|JWT Layout Sync / Web OAuth| FastAPI
-    FastAPI <-->|Google OAuth Flow| Google[Google Identity Provider]
+flowchart LR
+    Desktop[Desktop client\nTauri + React] --> API[FastAPI API]
+    Website[Website + dashboard\nVite + React] --> API
+    Desktop --> Local[Local layout storage]
+    Website --> Browser[Browser storage fallback]
+    API --> Database[(PostgreSQL or SQLite)]
+    API --> Google[Google OAuth]
 ```
 
-### Module Responsibilities
+The desktop and website clients share the same product concepts but keep platform-specific behavior at the edges. Native operations such as system metrics, startup integration, tray actions, deep links, and updater checks are implemented by the desktop client and Rust host. The API is the source of truth for authenticated layout synchronization.
 
-1. **`desktop/`**: Operates as a native Windows application. It runs frameless, transparent Tauri windows (`widget-<uuid>`) that skip the taskbar, sit always-on-top or pinned on the desktop, and auto-restore themselves when the desktop is revealed (e.g. using the Windows three-finger swipe).
-2. **`website/`**: Served as a browser app. It hosts the public marketing presence, product FAQ, download links, and an in-browser dashboard preview. When logged in, it acts as a layout editor and retrieves configurations from the backend.
-3. **`server/`**: A REST API built with FastAPI. It handles password-based authentication, Google OAuth authorization flow, and stores/syncs the widget layouts in a PostgreSQL database.
+## Requirements
 
----
+For the full project:
 
-## 🎨 Design System & Visuals
+- Windows 10/11
+- Node.js 20 or newer
+- Rust stable and Cargo
+- Microsoft C++ Build Tools and WebView2 Runtime for Tauri development
+- Python 3.9 or newer
+- PostgreSQL for shared or production data (SQLite can be used for local development)
 
-Widget Studio features a Windows 11-inspired glassmorphism look:
-- **Acrylic Surfaces**: Dynamic backdrop blur, soft reflections, border highlights, and variable shadow levels.
-- **Accent Themes**: Six premium built-in color palettes (Berry Pop, Citrus Splash, Ocean Candy, Lavender Dream, Mint Sorbet, Midnight Neon) with light and dark mode flexibility.
-- **Micro-Animations**: Fluid transitions powered by Framer Motion.
-- **Responsive Layout**: Sidebars, widgets, control bar, and inspector adapt smoothly across canvas resolutions.
+You can work on the website, desktop client, or API independently without installing every toolchain.
 
----
+## Quick start
 
-## ⚙️ Core Application Features
-
-- **Draggable & Resizable Canvas**: Drag, drop, and manually resize widgets with the mouse. Clean grid-snapping (12px intervals) allows tidy alignment.
-- **Window Locking & Pinning**: Pin a widget to place it as an independent native window on the desktop. Lock positions to prevent accidental shifts.
-- **Coord Memory**: Unpinning/pinning restores the widget back to its previous position on the canvas canvas seamlessly.
-- **Zero Terminal Popups**: Native CLI hooks and process creation are structured cleanly to avoid terminal flickers or popping windows during background runs.
-
----
-
-## 🧩 Widget Catalog
-
-Widget Studio comes with **13 built-in widgets**:
-
-| Widget Name | Description | Key Features |
-|---|---|---|
-| 🕒 **Clock** | Analog/digital hybrid clock | Custom time formats, seconds toggling, dynamic sizes |
-| 🌐 **World Clock** | Time tracker for different time zones | Multiple timezone cards, clean visual indicator |
-| 🌤️ **Weather** | Offline-safe local weather monitor | Temp, weather condition icons, fallback graphics |
-| 📝 **Notes** | Simple scratchpad note-taker | Auto-saving text area with customized font sizing |
-| 📌 **Sticky Notepad** | Virtual Windows-style sticky notes | Per-note styling, background coloring, list tags |
-| ✅ **Todo** | Interactive checklist builder | Add, check, filter, delete, and progress indicator |
-| 📈 **System Monitor** | Native memory and CPU metrics | Visual line charts for CPU/RAM usage (Tauri native) |
-| 🍅 **Pomodoro** | Time management focus timer | Custom intervals, alerts, visual progress circle |
-| 🧮 **Calculator** | Full-featured workspace calculator | Keypad inputs, history tape, standard operators |
-| 📅 **Calendar** | Monthly date viewer and planner | Full month grid, interactive day highlights, current day indicator |
-| 🔗 **Quick Links** | Grid of bookmark icons | Custom web URL targets, icons, label naming |
-| 🧠 **Mindmap** | Node-based interactive brainstorming tree | Add/delete branches, auto-layouts, custom connections |
-| 🌐 **Custom Widget** | iframe / HTML embed workspace | Embed videos, maps, custom websites, or custom CSS code |
-
----
-
-## 🚀 Setup & Execution Guide
-
-### Creating a custom widget
-
-Open **Dev tools** in Widget Studio for the visual/code builder, live sandbox preview, permissions guide, and publishing flow. See the full [custom widget guide](docs/custom-widget-guide.md) for block behavior, the `WidgetStudio.request(...)` API, and troubleshooting.
-
-Ensure you have **Node.js 20+**, **Rust stable**, **Python 3.9+**, and **PostgreSQL** installed.
-
-### 1. Launching the Backend Server
-
-Navigate to the `server/` directory, set up your Python virtual environment, install requirements, and set up your config:
+Clone the repository and install the client dependencies:
 
 ```powershell
-# Set up environment
+git clone https://github.com/susin-d/Widget-Studio.git
+cd Widget-Studio
+
+cd desktop
+npm install
+cd ..\website
+npm install
+```
+
+### Start the API
+
+Create a Python environment and install the server dependencies:
+
+```powershell
 cd server
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-# Create .env config
-copy .env.example .env  # Or create one manually with DATABASE_URL, SECRET_KEY, and Google OAuth credentials
+For a local SQLite database, set these values in `server/.env`:
 
-# Start FastAPI
+```env
+DATABASE_URL=sqlite+aiosqlite:///./widgets.db
+AUTO_CREATE_SCHEMA=true
+SECRET_KEY=change-this-for-local-development
+```
+
+For PostgreSQL, use a `postgresql+asyncpg://...` connection string instead. The server normalizes the configured driver for its synchronous SQLAlchemy session.
+
+Bootstrap the schema and run the API:
+
+```powershell
+python -m init_db
 python -m uvicorn main:app --reload --port 8000
 ```
-*API docs will be available at [http://localhost:8000/docs](http://localhost:8000/docs).*
 
-### 2. Launching the Website
+The API is available at [localhost:8000](http://localhost:8000), with interactive documentation at [localhost:8000/docs](http://localhost:8000/docs).
 
-Navigate to the `website/` directory, install dependencies, and spin up the web development server:
+### Start the website
+
+In a second terminal:
 
 ```powershell
 cd website
+Copy-Item .env.example .env
 npm install
 npm run dev
 ```
-*Website runs at [http://localhost:5173](http://localhost:5173).*
 
-### 3. Launching the Desktop Client
+The website runs at [localhost:5173](http://localhost:5173). Set `VITE_BACKEND_URL` in `website/.env` if the API is running somewhere other than `http://localhost:8000`.
 
-Navigate to the `desktop/` directory, install dependencies, and run in Tauri developer mode:
+### Start the desktop client
+
+In a third terminal:
 
 ```powershell
 cd desktop
@@ -139,87 +126,78 @@ npm install
 npm run tauri:dev
 ```
 
-### 4. Build and Publish the Windows Installer to the Website
+To preview only the browser UI, run `npm run dev` from `desktop/` instead.
 
-From the repository root, build the MSI and refresh the installer asset and release metadata consumed by the website:
+## Useful commands
+
+| Area | Command | Purpose |
+| --- | --- | --- |
+| Desktop | `npm run tauri:dev` | Run the native Windows app |
+| Desktop | `npm run build` | Type-check and build the desktop frontend |
+| Desktop | `npm run lint` | Run the TypeScript check |
+| Desktop | `npm run tauri:build` | Build MSI and NSIS installers |
+| Website | `npm run dev` | Start the web development server |
+| Website | `npm run build` | Type-check and build the website |
+| Website | `npm run lint` | Run the TypeScript check |
+| Server | `python -m uvicorn main:app --reload --port 8000` | Start the API |
+| Server | `python -m init_db` | Create the configured database schema |
+
+Run client commands from the corresponding `desktop/` or `website/` directory.
+
+## Configuration
+
+The example environment files document the supported settings:
+
+- [`server/.env.example`](server/.env.example) — database, JWT, OAuth, and AI provider settings
+- [`website/.env.example`](website/.env.example) — API base URL used at build time
+- [`desktop/.env.example`](desktop/.env.example) — desktop client environment settings
+
+Never commit `.env` files, database credentials, OAuth secrets, API keys, or Tauri signing keys. Keep `AUTO_CREATE_SCHEMA=true` limited to local one-off development; production deployments should apply schema changes explicitly.
+
+## Custom widgets
+
+The Custom Widget editor supports embedded HTML, CSS, JavaScript, iframes, and the `WidgetStudio.request(...)` bridge. See the [custom widget guide](docs/custom-widget-guide.md) for the supported blocks, permissions, API usage, and troubleshooting notes.
+
+## Releases
+
+The GitHub Actions release workflow runs when a version tag matching the Tauri version is pushed:
 
 ```powershell
-.\scripts\build-msi-and-update-site.ps1
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-The script builds the MSI from `desktop/`, copies the verified artifact to `website/public/WidgetStudioInstaller.msi`, writes `website/public/installer.json` with the version, size, and SHA-256, and runs the website production build. Use `-SkipWebsiteBuild` when only the public asset and metadata need to be refreshed. The existing Vercel website project will deploy these committed changes on its normal deployment workflow.
-
-### Publishing signed desktop updates
-
-The desktop app checks the GitHub Releases feed at `https://github.com/susin-d/Widget-Studio/releases/latest/download/latest.json`. Releases are built by `.github/workflows/release.yml` when a tag matching the Tauri version is pushed. Before using the workflow, add these GitHub Actions secrets:
+Signed updater releases require the following GitHub Actions secrets:
 
 ```text
 TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
-Keep the private key out of the repository. The committed updater public key in `desktop/src-tauri/tauri.conf.json` must remain paired with that private key. To build signed artifacts locally, set `TAURI_SIGNING_PRIVATE_KEY` (or `TAURI_SIGNING_PRIVATE_KEY_PATH`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in the PowerShell session—even for a passwordless key, set the password variable to an explicit empty string—then run `npm run tauri:build:release` from `desktop/`.
+The private key must remain outside the repository and paired with the updater public key in `desktop/src-tauri/tauri.conf.json`. To build a signed release locally, configure the same variables in the PowerShell session and run `npm run tauri:build:release` from `desktop/`.
 
----
-
-## ☁️ Deploying Website and API as Separate Vercel Projects
-
-Create two Vercel projects from this same repository:
-
-### 1. API project
-
-- **Root Directory:** `server`
-- **Framework Preset:** Other
-- **Build Command:** leave empty
-- **Output Directory:** leave empty
-- `server/main.py` exposes the FastAPI app as a Vercel Python Function.
-- `/api/*` keeps the same API paths used by local development and the desktop client.
-
-Add these environment variables to the API project:
-
-```env
-DATABASE_URL=postgresql://<user>:<password>@<host>/<database>
-SECRET_KEY=<long-random-production-secret>
-AUTO_CREATE_SCHEMA=false
-GOOGLE_CLIENT_ID=<google-client-id>
-GOOGLE_CLIENT_SECRET=<google-client-secret>
-GOOGLE_REDIRECT_URI=https://<api-domain>/api/auth/google/callback
-WEB_AUTH_REDIRECT_URI=https://<website-domain>/auth/callback
-OPENAI_API_KEY=<optional>
-```
-
-### 2. Website project
-
-- **Root Directory:** `website`
-- **Framework Preset:** Vite
-- The committed `website/vercel.json` builds with `npm run build` and publishes `dist`.
-
-Add this environment variable to the Website project before deploying:
-
-```env
-VITE_BACKEND_URL=https://<api-domain>
-```
-
-Because Vite embeds `VITE_BACKEND_URL` at build time, redeploy the website after changing it.
-
-Use a managed PostgreSQL database for `DATABASE_URL`; Vercel function instances and their local filesystem are ephemeral. Apply the existing schema once before enabling signup or layout sync:
+To refresh the installer asset and metadata consumed by the website after a local MSI build:
 
 ```powershell
-$env:DATABASE_URL="postgresql://<user>:<password>@<host>/<database>"
-python -m server.init_db
+.\scripts\build-msi-and-update-site.ps1
 ```
 
-The API health check is available at `https://<api-domain>/` (also `/health` and `/api/health`). Add the API callback URL to Google Cloud OAuth, and use the website callback URL as the web redirect target.
+## Contributing
 
----
+Contributions are welcome. Before opening a pull request:
 
-## 🔒 Authentication & Synchronization Workflow
+1. Create a focused branch from the current default branch.
+2. Keep changes scoped and update documentation when behavior or configuration changes.
+3. Run the relevant TypeScript checks and production builds for the areas you touched.
+4. Include reproduction steps, screenshots, or logs when changing user-visible behavior.
+5. Open an issue first for large feature proposals so the design can be discussed.
 
-When a user initiates Google Sign-In:
-1. **Desktop / Website** triggers OAuth request to the FastAPI Server: `/api/auth/google`.
-2. **Server** redirects user to the Google Login consent page.
-3. User completes login; Google redirects back to server callback `/api/auth/google/callback` with authorization code.
-4. **Server** exchanges code for a profile, stores user in db, generates a JWT session token, and redirects desktop OAuth to `widgetapp://auth/callback` or web OAuth to the website callback.
-5. **Desktop application** registers the custom protocol (`widgetapp://`) and absorbs the JWT to hydrate state and begin synchronization.
-# Widget-Studio
-# Widget-Studio
+Please do not include secrets, generated installers, local databases, or machine-specific files in commits. Use the [issue tracker](https://github.com/susin-d/Widget-Studio/issues) for bug reports and feature requests.
+
+## License
+
+No license file is currently included in this repository. Until a license is added, the source should not be assumed to be available for redistribution or commercial reuse.
+
+## Acknowledgements
+
+Widget Studio is built with [Tauri](https://tauri.app/), [React](https://react.dev/), [Vite](https://vite.dev/), [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://www.sqlalchemy.org/), [Zustand](https://zustand.docs.pmnd.rs/), and [Tailwind CSS](https://tailwindcss.com/).

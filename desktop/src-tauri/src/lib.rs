@@ -27,6 +27,9 @@ pub fn run() {
                 }
             }
         }))
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_process::init())
@@ -46,6 +49,7 @@ pub fn run() {
             commands::close_widget_window,
             commands::set_window_size,
             commands::set_window_position
+            ,commands::copy_to_clipboard
         ])
         .setup(|app| {
             #[cfg(any(target_os = "windows", target_os = "linux"))]

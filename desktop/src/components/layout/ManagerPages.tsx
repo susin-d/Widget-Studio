@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, Cloud, Cpu, Download, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Plus, RotateCw, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Cloud, Cpu, Download, Eye, EyeOff, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Pin, Plus, Play, RotateCw, ShieldCheck, Sparkles, Star, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ManagerView } from "./ManagerNavigation";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
@@ -7,6 +7,9 @@ import { useAuthStore, BACKEND_URL } from "../../store/authStore";
 import { savePersistedState } from "../../lib/storage";
 import { WidgetBuilder } from "../developer/WidgetBuilder";
 import { useSystemInfo } from "../../hooks/useSystemInfo";
+import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidgetPermission } from "../../types/customWidget";
+import { isTauri } from "../../lib/tauri";
+import { createWidget, useWidgetStore } from "../../store/widgetStore";
 
 
 
@@ -262,7 +265,17 @@ function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopW
 function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}) {
   const [message,setMessage]=useState("");
   const [isError,setIsError]=useState(false);
-  const exportAll=()=>downloadJson("widget-studio-widgets.json",{version:2,widgets});
+  const exportJson = async (name: string, value: unknown) => {
+    try {
+      await downloadJson(name, value);
+      setIsError(false);
+      setMessage(`Exported ${name}.`);
+    } catch (error) {
+      setIsError(true);
+      setMessage(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+  const exportAll=()=>void exportJson("widget-studio-widgets.json",{version:2,widgets});
   
   const validateWidget = (w: any): w is DesktopWidget => {
     if (!w || typeof w !== "object") return false;
@@ -293,13 +306,64 @@ function ImportExport({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidge
     setMessage(error instanceof Error?error.message:"Import failed");
   }};
 
-  return <Page title="Import & export" subtitle="Share widget configurations as portable JSON files."><div className="grid grid-cols-2 gap-4"><div className="feature-card flex-col items-start"><Download size={25}/><b>Import widgets</b><p>Select a Widget Studio JSON export. Imported widgets receive new IDs and are added to your workspace.</p><label className="primary-action cursor-pointer">Choose file<input className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></label></div><div className="feature-card flex-col items-start"><Cloud size={25}/><b>Export all widgets</b><p>Export {widgets.length} configured widget(s), including appearance, position and widget data.</p><button className="primary-action" disabled={!widgets.length} onClick={exportAll}>Export JSON</button></div></div>{message&&<div className={`content-panel mt-4 text-sm ${isError ? "border-red-500 bg-red-50 text-red-700" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"}`}>{message}</div>}<Panel title="Individual widgets"><div className="space-y-2">{widgets.map(w=><div className="flex items-center rounded-lg bg-black/5 p-3 text-sm" key={w.id}><b>{w.name}</b><span className="ml-2 text-xs text-muted">{w.type}</span><button className="ml-auto text-indigo-600 dark:text-indigo-400 font-semibold" onClick={()=>downloadJson(`${safeName(w.name)}.widget.json`,{version:2,widgets:[w]})}>Export</button></div>)}</div></Panel></Page>
+  return <Page title="Import & export" subtitle="Share widget configurations as portable JSON files."><div className="grid grid-cols-2 gap-4"><div className="feature-card flex-col items-start"><Download size={25}/><b>Import widgets</b><p>Select a Widget Studio JSON export. Imported widgets receive new IDs and are added to your workspace.</p><label className="primary-action cursor-pointer">Choose file<input className="hidden" type="file" accept="application/json,.json" onChange={e=>void importFile(e.target.files?.[0])}/></label></div><div className="feature-card flex-col items-start"><Cloud size={25}/><b>Export all widgets</b><p>Export {widgets.length} configured widget(s), including appearance, position and widget data.</p><button className="primary-action" disabled={!widgets.length} onClick={exportAll}>Export JSON</button></div></div>{message&&<div className={`content-panel mt-4 text-sm ${isError ? "border-red-500 bg-red-50 text-red-700" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"}`}>{message}</div>}<Panel title="Individual widgets"><div className="space-y-2">{widgets.map(w=><div className="flex items-center rounded-lg bg-black/5 p-3 text-sm" key={w.id}><b>{w.name}</b><span className="ml-2 text-xs text-muted">{w.type}</span><button className="ml-auto text-indigo-600 dark:text-indigo-400 font-semibold" onClick={()=>void exportJson(`${safeName(w.name)}.widget.json`,{version:2,widgets:[w]})}>Export</button></div>)}</div></Panel></Page>
 }
 
-function downloadJson(name:string,value:unknown){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)}
+async function downloadJson(name:string,value:unknown){
+  const contents = JSON.stringify(value, null, 2);
+  if (isTauri) {
+    const [{ save }, { writeTextFile }] = await Promise.all([
+      import("@tauri-apps/plugin-dialog"),
+      import("@tauri-apps/plugin-fs"),
+    ]);
+    const path = await save({
+      defaultPath: name,
+      filters: [{ name: "Widget Studio JSON", extensions: ["json"] }],
+    });
+    if (!path) return;
+    await writeTextFile(path, contents);
+    return;
+  }
+  const url=URL.createObjectURL(new Blob([contents],{type:"application/json"}));
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 function safeName(value:string){return value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"widget"}
 
-function Layouts({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}){const {layouts,saveLayout,deleteLayout,renameLayout}=useManagerStore();return <Page title="Desktop layouts" subtitle="Save arrangements and switch context instantly." action={<button className="primary-action" onClick={()=>saveLayout(`Layout ${layouts.length+1}`,widgets)}><Plus size={15}/> Save current</button>}><div className="grid grid-cols-3 gap-4">{layouts.length===0?<div className="content-panel col-span-3 text-sm text-muted">No saved layouts. Save the current canvas to create one.</div>:layouts.map((x,i)=><div className="layout-card" key={x.id}><button className={`layout-preview lp-${i}`} onClick={()=>onSetWidgets(structuredClone(x.widgets))}><span/><span/><span/></button><div className="mt-3 flex items-center gap-2"><div className="flex-1 min-w-0"><input type="text" value={x.name} onChange={(e)=>renameLayout(x.id,e.target.value)} className="bg-transparent font-semibold outline-none border-b border-transparent hover:border-black/10 focus:border-accent w-full text-sm py-0.5" /><p className="text-[11px] text-muted mt-0.5">{x.widgets.length} widgets · {new Date(x.updatedAt).toLocaleDateString()}</p></div><button title="Delete layout" onClick={()=>deleteLayout(x.id)} className="ml-auto text-red-500 hover:text-red-700 px-1">×</button></div></div>)}</div></Page>}
+function Layouts({widgets,onSetWidgets}:{widgets:DesktopWidget[];onSetWidgets:(widgets:DesktopWidget[])=>void}){
+  const {layouts,saveLayout,deleteLayout,renameLayout,updateLayout}=useManagerStore();
+  const [selectedId,setSelectedId]=useState<string | null>(layouts[0]?.id ?? null);
+  const [draft,setDraft]=useState<DesktopWidget[]>([]);
+  const [interaction,setInteraction]=useState<{id:string;mode:"move"|"resize";x:number;y:number;rect:DesktopWidget["rect"]}|null>(null);
+  const canvasRef=useRef<HTMLDivElement>(null);
+  const selected=layouts.find(layout=>layout.id===selectedId) ?? layouts[0];
+
+  useEffect(()=>{ if(selected){setSelectedId(selected.id);setDraft(structuredClone(selected.widgets));} else {setDraft([]);} },[selected?.id]);
+  const updateFromPointer=(event:React.PointerEvent)=>{
+    if(!interaction||!canvasRef.current)return;
+    const bounds=canvasRef.current.getBoundingClientRect();
+    const dx=(event.clientX-interaction.x)/bounds.width*1920;
+    const dy=(event.clientY-interaction.y)/bounds.height*1080;
+    setDraft(items=>items.map(widget=>widget.id!==interaction.id?widget:{...widget,rect:interaction.mode==="move"?{...widget.rect,x:Math.max(0,Math.round(interaction.rect.x+dx)),y:Math.max(0,Math.round(interaction.rect.y+dy))}:{...widget.rect,width:Math.max(120,Math.round(interaction.rect.width+dx)),height:Math.max(80,Math.round(interaction.rect.height+dy))}}));
+  };
+  const beginInteraction=(event:React.PointerEvent,widget:DesktopWidget,mode:"move"|"resize")=>{event.stopPropagation();canvasRef.current?.setPointerCapture(event.pointerId);setInteraction({id:widget.id,mode,x:event.clientX,y:event.clientY,rect:{...widget.rect}});};
+  const finishInteraction=()=>setInteraction(null);
+  const apply=()=>{if(selected){updateLayout(selected.id,draft);onSetWidgets(structuredClone(draft));}};
+  return <Page title="Desktop layouts" subtitle="Save arrangements and switch context instantly." action={<button className="primary-action" onClick={()=>saveLayout(`Layout ${layouts.length+1}`,widgets)}><Plus size={15}/> Save current</button>}>
+    {layouts.length===0?<div className="content-panel text-sm text-muted">No saved layouts. Save the current canvas to create one.</div>:<div className="grid grid-cols-[minmax(0,1fr)_250px] gap-4">
+      <section className="content-panel min-w-0"><div className="mb-3 flex items-center justify-between"><div><b>Editable canvas</b><p className="text-xs text-muted">Drag widgets to move them. Drag the corner to resize.</p></div><button className="primary-action text-xs" onClick={apply}>Save & apply</button></div>
+        <div ref={canvasRef} className="layout-editor-canvas" onPointerMove={updateFromPointer} onPointerUp={finishInteraction} onPointerCancel={finishInteraction}>
+          <div className="layout-editor-grid" />
+          {draft.map(widget=><div key={widget.id} className={`layout-editor-widget ${widget.id===interaction?.id?"is-active":""}`} style={{left:`${widget.rect.x/1920*100}%`,top:`${widget.rect.y/1080*100}%`,width:`${widget.rect.width/1920*100}%`,height:`${widget.rect.height/1080*100}%`,zIndex:widget.zIndex??1}} onPointerDown={event=>beginInteraction(event,widget,"move")}><span>{widget.name}</span><small>{widget.type}</small><button aria-label={`Resize ${widget.name}`} className="layout-editor-resize" onPointerDown={event=>beginInteraction(event,widget,"resize")} /></div>)}
+        </div>
+      </section>
+      <aside className="content-panel space-y-2"><b>Saved layouts</b>{layouts.map(layout=><div key={layout.id} className={`layout-editor-list-item ${layout.id===selected?.id?"is-selected":""}`}><button className="min-w-0 flex-1 text-left" onClick={()=>setSelectedId(layout.id)}><b className="block truncate text-sm">{layout.name}</b><span className="text-[11px] text-muted">{layout.widgets.length} widgets · {new Date(layout.updatedAt).toLocaleDateString()}</span></button><button title="Delete layout" onClick={()=>{deleteLayout(layout.id);if(layout.id===selected?.id)setSelectedId(layouts.find(item=>item.id!==layout.id)?.id??null);}} className="px-1 text-red-500">×</button><input aria-label="Rename layout" value={layout.name} onChange={event=>renameLayout(layout.id,event.target.value)} className="col-span-2 w-full border-b border-black/10 bg-transparent text-xs outline-none focus:border-accent dark:border-white/10" /></div>)}</aside>
+    </div>}
+  </Page>;
+}
 
 function Performance({widgets}:{widgets:DesktopWidget[]}){const info=useSystemInfo();const ram=info?`${(info.ram_used/1024/1024/1024).toFixed(1)} GB`:"Unavailable";const nameCounts=new Map<string,number>();const labels=widgets.map((widget)=>{const count=(nameCounts.get(widget.name)||0)+1;nameCounts.set(widget.name,count);return count===1?widget.name:`${widget.name} ${count}`});return <Page title="Performance" subtitle="Live system metrics refresh every five seconds."><div className="grid grid-cols-3 gap-4"><div className="metric-card"><Cpu/><b className="mt-4 text-2xl">{info?`${info.cpu_usage.toFixed(1)}%`:"Unavailable"}</b><span>System CPU</span></div><div className="metric-card"><MemoryStick/><b className="mt-4 text-2xl">{ram}</b><span>System memory used</span></div><div className="metric-card"><Zap/><b className="mt-4 text-2xl">{widgets.length}</b><span>Configured widgets</span></div></div><Panel title="Widget configuration">{widgets.map((w,index)=><div className="perf-row" key={w.id}><b>{labels[index]}</b><div className="perf-bar"><span style={{width:`${Math.min(100,w.settings.refreshInterval/3)}%`}}/></div><span>{w.settings.refreshInterval}s</span><span>{w.pinned?"Running":"Canvas"}</span></div>)}</Panel></Page>}
 
@@ -337,6 +401,102 @@ function Automations({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSe
   }, [settings.focusHoursAutomation]);
 
   return <Page title="Automations" subtitle="Trigger automated changes based on desktop and battery events."><div className="content-panel max-w-2xl space-y-4 text-sm"><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Battery Saver Auto-mode</b><span className="text-xs text-muted">Reduces widget transparency below 20% battery. Current battery: {systemInfo?.battery_level != null ? `${systemInfo.battery_level}%` : "unavailable"}.</span></div><input type="checkbox" checked={settings.batterySaverAutomation} onChange={() => updateSetting("batterySaverAutomation", !settings.batterySaverAutomation)} className="h-5 w-5 accent-accent" /></label><label className="flex cursor-pointer items-center justify-between rounded-lg bg-black/5 p-3 dark:bg-white/5"><div><b className="block">Workspace Focus Hours</b><span className="text-xs text-muted">Hides non-essential widgets while enabled; clocks and calendars remain visible.</span></div><input type="checkbox" checked={settings.focusHoursAutomation} onChange={() => updateSetting("focusHoursAutomation", !settings.focusHoursAutomation)} className="h-5 w-5 accent-accent" /></label></div></Page>;
+}
+
+type AgentId = "todo" | "workspace";
+
+function AIAgents({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
+  const [enabled, setEnabled] = useState<Record<AgentId, boolean>>({ todo: true, workspace: true });
+  const [command, setCommand] = useState("");
+  const [message, setMessage] = useState("Agents are ready to manage this desktop.");
+  const [activity, setActivity] = useState<string[]>([]);
+
+  const run = (agent: AgentId, action: () => string) => {
+    if (!enabled[agent]) {
+      setMessage(`${agent === "todo" ? "Todo" : "Workspace"} Agent is paused.`);
+      return;
+    }
+    const result = action();
+    setMessage(result);
+    setActivity((items) => [`${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${result}`, ...items].slice(0, 6));
+  };
+
+  const addTodo = (text: string) => {
+    const todo = widgets.find((widget) => widget.type === "todo");
+    if (!todo) {
+      const created = createWidget("todo", widgets.length);
+      created.data = { ...created.data, items: [{ id: crypto.randomUUID(), text, done: false }] };
+      onSetWidgets([...widgets, created]);
+      return "Created a Todo widget and added the task.";
+    }
+    const items = Array.isArray(todo.data?.items) ? todo.data.items : [];
+    onSetWidgets(widgets.map((widget) => widget.id === todo.id ? { ...widget, data: { ...widget.data, items: [...items, { id: crypto.randomUUID(), text, done: false }] } } : widget));
+    return `Added “${text}” to ${todo.name}.`;
+  };
+
+  const runCommand = () => {
+    const value = command.trim();
+    if (!value) return;
+    const lower = value.toLowerCase();
+    if (lower.startsWith("add todo:") || lower.startsWith("add task:")) {
+      run("todo", () => addTodo(value.slice(value.indexOf(":") + 1).trim() || "New task"));
+    } else if (lower.includes("complete") && lower.includes("todo")) {
+      run("todo", () => {
+        const todo = widgets.find((widget) => widget.type === "todo");
+        if (!todo) return "No Todo widget is installed.";
+        const items = Array.isArray(todo.data?.items) ? todo.data.items : [];
+        onSetWidgets(widgets.map((widget) => widget.id === todo.id ? { ...widget, data: { ...widget.data, items: items.map((item: any) => ({ ...item, done: true })) } } : widget));
+        return "Completed every task in the Todo widget.";
+      });
+    } else if (lower.includes("hide") && lower.includes("widget")) {
+      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: true }))); return `Hidden ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
+    } else if ((lower.includes("show") || lower.includes("unhide")) && lower.includes("widget")) {
+      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return `Showing ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
+    } else if (lower.includes("pin") && lower.includes("widget")) {
+      run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, pinned: true, locked: true }))); return `Pinned ${widgets.length} widget${widgets.length === 1 ? "" : "s"}.`; });
+    } else {
+      setMessage("Try: “add todo: review the widgets” or “hide all widgets”.");
+    }
+    setCommand("");
+  };
+
+  const todoCount = widgets.filter((widget) => widget.type === "todo").length;
+  const completed = widgets.filter((widget) => widget.type === "todo").reduce((total, widget) => total + (Array.isArray(widget.data?.items) ? widget.data.items.filter((item: any) => item.done).length : 0), 0);
+  return <Page title="AI Agents" subtitle="Give focused agents permission to manage your Todo list and the whole widget workspace.">
+    <div className="grid grid-cols-2 gap-4 max-w-4xl">
+      <section className="content-panel col-span-2 border-accent/20 bg-accent/[0.04]">
+        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><Sparkles size={19}/></div><div><b className="block">Agent command center</b><p className="mt-1 text-xs text-muted">Commands run locally against your current widget state. Nothing is changed while an agent is paused.</p></div></div>
+        <div className="mt-4 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runCommand(); }} placeholder="Try: add todo: prepare tomorrow's plan" className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"/><button onClick={runCommand} className="primary-action"><Play size={14}/> Run</button></div>
+        <p className="mt-3 text-xs font-medium text-accent">{message}</p>
+      </section>
+      <AgentCard title="Todo Agent" description="Adds tasks, finds your Todo widget, and completes the checklist." icon={<CheckSquare size={18}/>} enabled={enabled.todo} onToggle={() => setEnabled((state) => ({ ...state, todo: !state.todo }))} onRun={() => run("todo", () => addTodo("Review today's priorities"))} stats={`${todoCount} Todo widget${todoCount === 1 ? "" : "s"} · ${completed} completed`} />
+      <AgentCard title="Workspace Agent" description="Manages every widget together: show, hide, pin, and organize the desktop." icon={<Bot size={18}/>} enabled={enabled.workspace} onToggle={() => setEnabled((state) => ({ ...state, workspace: !state.workspace }))} onRun={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return `Showing all ${widgets.length} widgets.`; })} stats={`${widgets.length} installed widget${widgets.length === 1 ? "" : "s"}`} />
+      <section className="content-panel col-span-2"><header className="mb-3 flex items-center gap-2"><WandSparkles size={16} className="text-accent"/><b>Quick controls</b></header><div className="grid grid-cols-4 gap-2"><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: false }))); return "Showing all widgets."; })}><Eye size={15}/><span>Show all</span></button><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, hidden: true }))); return "Hidden all widgets."; })}><EyeOff size={15}/><span>Hide all</span></button><button className="quick-action" onClick={() => run("workspace", () => { onSetWidgets(widgets.map((widget) => ({ ...widget, pinned: true, locked: true }))); return "Pinned all widgets."; })}><Pin size={15}/><span>Pin all</span></button><button className="quick-action" onClick={() => run("todo", () => addTodo("Plan the next focus session"))}><CheckSquare size={15}/><span>Add task</span></button></div></section>
+      <section className="content-panel col-span-2"><b>Recent agent activity</b>{activity.length ? <div className="mt-3 space-y-2 text-xs text-muted">{activity.map((item, index) => <div key={`${item}-${index}`} className="rounded-lg bg-black/[0.04] px-3 py-2 dark:bg-white/[0.05]">{item}</div>)}</div> : <p className="mt-3 text-xs text-muted">Run a command or quick control to see activity here.</p>}</section>
+    </div>
+  </Page>;
+}
+
+function AgentCard({ title, description, icon, enabled, onToggle, onRun, stats }: { title: string; description: string; icon: React.ReactNode; enabled: boolean; onToggle: () => void; onRun: () => void; stats: string }) {
+  return <section className="content-panel"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">{icon}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><b>{title}</b><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${enabled ? "bg-emerald-500/10 text-emerald-600" : "bg-black/10 text-muted dark:bg-white/10"}`}>{enabled ? "Active" : "Paused"}</span></div><p className="mt-1 text-xs leading-relaxed text-muted">{description}</p><p className="mt-3 text-[11px] font-medium text-muted">{stats}</p></div></div><div className="mt-4 flex items-center gap-2"><button onClick={onToggle} className="rounded-lg border border-black/10 px-3 py-2 text-xs font-semibold dark:border-white/10">{enabled ? "Pause agent" : "Enable agent"}</button><button onClick={onRun} disabled={!enabled} className="primary-action ml-auto text-xs"><Play size={13}/> Run now</button></div></section>;
+}
+
+const permissionInfo: Record<CustomWidgetPermission, { label: string; description: string }> = {
+  network: { label: "Network access", description: "Connect to HTTPS APIs and external services." },
+  clipboard: { label: "Clipboard", description: "Copy text to the Windows clipboard." },
+  notifications: { label: "Notifications", description: "Send desktop notifications." },
+  openExternal: { label: "Open external links", description: "Open approved HTTP(S) links in your browser." }
+};
+
+function WindowsPermissions({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
+  const togglePermission = (widgetId: string, permission: CustomWidgetPermission, enabled: boolean) => {
+    onSetWidgets(widgets.map((widget) => {
+      if (widget.id !== widgetId || widget.type !== "custom") return widget;
+      const data = normalizeCustomWidgetData(widget.data);
+      return { ...widget, data: { ...widget.data, permissions: { ...data.permissions, [permission]: enabled } } };
+    }));
+  };
+  return <Page title="Windows permissions" subtitle="Manage what each widget can access on this Windows desktop."><div className="max-w-3xl space-y-4"><div className="content-panel flex items-start gap-3 text-sm"><ShieldCheck className="mt-0.5 text-emerald-500" size={22}/><div><b>Permission center</b><p className="mt-1 text-xs leading-relaxed text-muted">The signed Widget Studio app keeps its native Windows capabilities restricted to the desktop package. The controls below manage sandbox permissions for each custom widget; built-in widgets remain trusted and do not request external access.</p><div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold"><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-600">Window management · enabled</span><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-600">Notifications · enabled</span><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-600">User files · scoped</span></div></div></div>{widgets.map((widget) => { const custom = widget.type === "custom"; const permissions = custom ? normalizeCustomWidgetData(widget.data).permissions : {}; return <section className="content-panel p-0" key={widget.id}><div className="flex items-center gap-3 border-b border-black/5 px-4 py-3 dark:border-white/5"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-accent"><ShieldCheck size={18}/></div><div className="min-w-0"><b className="block truncate">{widget.name}</b><span className="text-[11px] text-muted">{custom ? "Custom app · sandboxed" : "Built-in app · no special permissions"}</span></div><span className="ml-auto text-[11px] font-semibold text-emerald-500">{custom ? `${CUSTOM_WIDGET_PERMISSIONS.filter((permission) => permissions[permission]).length} allowed` : "Trusted"}</span></div>{custom ? <div className="divide-y divide-black/5 px-4 dark:divide-white/5">{CUSTOM_WIDGET_PERMISSIONS.map((permission) => <label className="flex cursor-pointer items-center justify-between gap-4 py-3" key={permission}><div><b className="block text-xs">{permissionInfo[permission].label}</b><span className="text-[11px] text-muted">{permissionInfo[permission].description}</span></div><input type="checkbox" checked={Boolean(permissions[permission])} onChange={(event) => togglePermission(widget.id, permission, event.target.checked)} className="h-5 w-5 accent-accent" /></label>)}</div> : <div className="px-4 py-3 text-xs text-muted">This app runs with the standard Widget Studio sandbox and does not access external services.</div>}</section>; })}{widgets.length === 0 && <div className="content-panel text-sm text-muted">No installed widgets yet. Create a custom widget to manage its permissions.</div>}</div></Page>;
 }
 
 function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widgets: DesktopWidget[]; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
@@ -440,9 +600,11 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
     return <Automations widgets={widgets} onSetWidgets={onSetWidgets} />;
   }
 
-  if (view === "plugins") {
+  if (view === "permissions") {
+    return <WindowsPermissions widgets={widgets} onSetWidgets={onSetWidgets} />;
+    /* legacy capability summary
     return (
-      <Page title="Plugin Manager" subtitle="Manage sandboxed widget API scopes and security tokens.">
+      <Page title="App permissions" subtitle="Choose what each widget app can access on this device.">
         <div className="content-panel max-w-2xl text-sm space-y-3">
           <div className="flex items-center justify-between border-b border-black/5 pb-2 dark:border-white/5">
             <b>Sandboxed Capabilities</b>
@@ -464,7 +626,7 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
           </div>
         </div>
       </Page>
-    );
+    ); */
   }
 
   if (view === "sync") {
@@ -516,6 +678,7 @@ export function ManagerPage({ view, widgets, onOpenWidgets, onSetWidgets, editin
   if (view === "marketplace") return <ImportExport widgets={widgets} onSetWidgets={onSetWidgets} />;
   if (view === "layouts") return <Layouts widgets={widgets} onSetWidgets={onSetWidgets} />;
   if (view === "performance") return <Performance widgets={widgets} />;
+  if (view === "agents") return <AIAgents widgets={widgets} onSetWidgets={onSetWidgets} />;
   if (view === "developer") return <WidgetBuilder editingWidget={editingWidget} onPublish={onPublishCustomWidget} onCancel={onOpenWidgets} />;
   return <GenericPage view={view} widgets={widgets} onSetWidgets={onSetWidgets} />;
 }

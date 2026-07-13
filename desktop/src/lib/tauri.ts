@@ -36,4 +36,5 @@ export const nativeApi = {
   closeWidgetWindow: (id: string) => callTauri<void>("close_widget_window", { id }),
   setWindowSize: (width: number, height: number) => callTauri<void>("set_window_size", { width, height }),
   setWindowPosition: (x: number, y: number) => callTauri<void>("set_window_position", { x, y })
+  ,copyToClipboard: (text: string) => callTauri<void>("copy_to_clipboard", { text })
 };
