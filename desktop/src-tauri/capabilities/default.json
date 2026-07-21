@@ -23,7 +23,6 @@
       "allow": [{ "path": "$HOME/**" }]
     },
     "shell:default",
-    "deep-link:default",
     "autostart:default",
     "process:default",
     "updater:default"

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppWindow, Download, EyeOff, Grid3X3, LoaderCircle, Moon, Pin, Redo2, RotateCcw, Undo2 } from "lucide-react";
-import { loadLocalPersistedState, loadPersistedState, resetCloudSyncCursor, saveLocalPersistedState, savePersistedState, syncPersistedStateToCloud } from "./lib/storage";
+import { loadLocalPersistedState, saveLocalPersistedState } from "./lib/storage";
 import { isTauri, nativeApi } from "./lib/tauri";
 import { checkForUpdates, installUpdate } from "./lib/updater";
 import { useSettingsStore } from "./store/settingsStore";
@@ -15,7 +15,6 @@ import { Button } from "./components/ui/Button";
 import { hexToRgb } from "./lib/colors";
 import { openWidgetOverlay, closeWidgetOverlay } from "./lib/widgetActions";
 
-import { useAuthStore } from "./store/authStore";
 import type { PersistedState, WidgetKind } from "./types/widget";
 import type { Update } from "@tauri-apps/plugin-updater";
 
@@ -92,11 +91,7 @@ export function App() {
     width: Math.max(960, ...widgets.map((widget) => widget.rect.x + widget.rect.width + 96)),
     height: Math.max(640, ...widgets.map((widget) => widget.rect.y + widget.rect.height + 96))
   }), [widgets]);
-  const token = useAuthStore((state) => state.token);
-  const sessionVersion = useAuthStore((state) => state.sessionVersion);
-  const sessionSource = useAuthStore((state) => state.sessionSource);
   const initialStateLoaded = useRef(false);
-  const handledSessionVersion = useRef(0);
 
   const handleManagerViewChange = useCallback((view: ManagerView) => {
     if (view === "developer") setDeveloperWidgetId(null);
@@ -145,13 +140,8 @@ export function App() {
     }
   }, [hydrate, isWidgetWindow, reportError, setSettings]);
 
-  // Initialize auth session and load state
   useEffect(() => {
-    const loadState = isWidgetWindow ? loadLocalPersistedState : loadPersistedState;
-    // Widget windows need the same persisted session as the main window so
-    // authenticated features such as the AI chatbot work in floating overlays.
-    useAuthStore.getState().initialize();
-    loadState().then((state) => {
+    loadLocalPersistedState().then((state) => {
       applyLoadedState(state);
       initialStateLoaded.current = true;
     });
@@ -162,74 +152,6 @@ export function App() {
     const timer = window.setTimeout(() => void checkForAppUpdates(), 2500);
     return () => window.clearTimeout(timer);
   }, [checkForAppUpdates, isWidgetWindow]);
-
-  // Email/password and web OAuth establish a session after the initial load. Pull the
-  // cloud layout for login/OAuth, while a new signup publishes the current local layout.
-  useEffect(() => {
-    if (isWidgetWindow || !initialStateLoaded.current || !token || sessionVersion === handledSessionVersion.current) return;
-    handledSessionVersion.current = sessionVersion;
-
-    if (sessionSource === "signup") {
-      resetCloudSyncCursor();
-      void savePersistedState(persisted);
-      return;
-    }
-
-    void loadPersistedState().then(applyLoadedState);
-  }, [applyLoadedState, isWidgetWindow, persisted, sessionSource, sessionVersion, token]);
-
-  // Deep Link handler for OAuth redirects
-  useEffect(() => {
-    if (isWidgetWindow) return;
-    let unlistenDeepLink: (() => void) | undefined;
-    let unlistenSingleInstance: (() => void) | undefined;
-    if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
-      const handleUrls = (urls: string[]) => {
-        console.log("Deep link URL received:", urls);
-        for (const url of urls) {
-          // Support both callback formats (with trailing slash or path parameters)
-          if (url.startsWith("widgetapp://auth/callback")) {
-            try {
-              const urlObj = new URL(url);
-              const token = urlObj.searchParams.get("token");
-              const email = urlObj.searchParams.get("email");
-              if (token && email) {
-                void nativeApi.showWindow().catch((error) => {
-                  console.warn("Could not restore Widget Studio after OAuth:", error);
-                });
-                useAuthStore.getState().setSession(token, email, "oauth");
-              }
-            } catch (error) {
-              console.warn("Ignoring malformed Widget Studio OAuth callback:", error);
-            }
-          }
-        }
-      };
-
-      import("@tauri-apps/plugin-deep-link").then(({ getCurrent, onOpenUrl }) => {
-        // Windows passes a custom-protocol URL as a startup argument. The live
-        // event alone is not enough when the browser launches a new process.
-        void getCurrent()
-          .then((urls) => { if (urls?.length) handleUrls(urls); })
-          .catch((error) => console.warn("Could not read startup deep link:", error));
-
-        return onOpenUrl(handleUrls).then((unlisten) => { unlistenDeepLink = unlisten; });
-      }).catch((e) => {
-        console.warn("Failed to initialize Tauri deep link plugin:", e);
-      });
-
-      // The native single-instance guard forwards URLs from blocked secondary
-      // launches so OAuth still completes in the already-running application.
-      import("@tauri-apps/api/event")
-        .then(({ listen }) => listen<string[]>("single-instance-deep-links", ({ payload }) => handleUrls(payload)))
-        .then((unlisten) => { unlistenSingleInstance = unlisten; })
-        .catch((error) => console.warn("Failed to listen for secondary launch URLs:", error));
-    }
-    return () => {
-      unlistenDeepLink?.();
-      unlistenSingleInstance?.();
-    };
-  }, [hydrate, isWidgetWindow, setSettings]);
 
   useEffect(() => {
     let activeTheme = settings.theme;
@@ -249,10 +171,8 @@ export function App() {
     if (isWidgetWindow || !initialStateLoaded.current) return;
 
     const localTimer = window.setTimeout(() => void saveLocalPersistedState(persisted), 250);
-    const cloudTimer = window.setTimeout(() => void syncPersistedStateToCloud(persisted), 1800);
     return () => {
       window.clearTimeout(localTimer);
-      window.clearTimeout(cloudTimer);
     };
   }, [isWidgetWindow, persisted]);
 

@@ -1,12 +1,7 @@
 import type { AppSettings, PersistedState } from "../types/widget";
 import { nativeApi, isTauri } from "./tauri";
-import { useAuthStore, BACKEND_URL } from "../store/authStore";
 
 const STORAGE_KEY = "desktop-widgets-state";
-const CLOUD_REQUEST_TIMEOUT_MS = 15_000;
-let lastCloudUpdatedAt: string | null = null;
-let cloudSyncInFlight: Promise<boolean> | null = null;
-let cloudSyncQueuedState: PersistedState | null = null;
 
 export const defaultSettings: AppSettings = {
   theme: "system",
@@ -34,10 +29,6 @@ export const emptyState = (): PersistedState => ({
   widgets: [],
   settings: defaultSettings
 });
-
-export function resetCloudSyncCursor(): void {
-  lastCloudUpdatedAt = null;
-}
 
 export async function loadLocalPersistedState(): Promise<PersistedState> {
   let localState: PersistedState = emptyState();
@@ -77,60 +68,6 @@ export async function loadPersistedState(): Promise<PersistedState> {
 
 export async function savePersistedState(state: PersistedState): Promise<boolean> {
   return saveLocalPersistedState(state);
-}
-
-export async function syncPersistedStateToCloud(_state: PersistedState): Promise<boolean> {
-  return true;
-}
-
-async function syncPersistedStateToCloudOnce(state: PersistedState): Promise<boolean> {
-  const safeState = sanitize(state);
-
-  const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();
-  if (!token) return true;
-
-  try {
-    setSyncStatus("syncing");
-    const res = await fetchWithTimeout(`${BACKEND_URL}/api/sync/layout`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        widgets: safeState.widgets,
-        settings: safeState.settings,
-        updated_at: lastCloudUpdatedAt
-      })
-    });
-    if (res.ok) {
-      const savedState = await res.json();
-      lastCloudUpdatedAt = typeof savedState.updated_at === "string" ? savedState.updated_at : lastCloudUpdatedAt;
-      setSyncStatus("synced");
-      setLastSyncedAt(new Date().toLocaleTimeString());
-      return true;
-    } else if (res.status === 401) {
-      resetCloudSyncCursor();
-      logout();
-    } else {
-      setSyncStatus("error");
-    }
-  } catch (error) {
-    console.warn("Could not save layout to backend", error);
-    setSyncStatus("offline");
-  }
-
-  return false;
-}
-
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), CLOUD_REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    window.clearTimeout(timeout);
-  }
 }
 
 function sanitize(value: PersistedState): PersistedState {

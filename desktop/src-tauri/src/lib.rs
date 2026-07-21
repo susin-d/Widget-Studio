@@ -2,9 +2,7 @@ mod commands;
 mod startup;
 mod tray;
 
-use tauri::{Emitter, Manager};
-#[cfg(any(target_os = "windows", target_os = "linux"))]
-use tauri_plugin_deep_link::DeepLinkExt;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,20 +17,13 @@ pub fn run() {
                 let _ = window.maximize();
                 let _ = window.set_focus();
 
-                let deep_links: Vec<String> = args
-                    .into_iter()
-                    .filter(|argument| argument.starts_with("widgetapp://"))
-                    .collect();
-                if !deep_links.is_empty() {
-                    let _ = window.emit("single-instance-deep-links", deep_links);
-                }
+                let _ = args;
             }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(startup::plugin())
@@ -54,12 +45,10 @@ pub fn run() {
             commands::copy_to_clipboard,
             commands::get_openai_api_key,
             commands::set_openai_api_key,
-            commands::delete_openai_api_key
-            ,commands::complete_ai_chat
+            commands::delete_openai_api_key,
+            commands::complete_ai_chat
         ])
         .setup(|app| {
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
-            app.deep_link().register_all()?;
             tray::build_tray(app)?;
             commands::start_widget_visibility_monitor(app.handle().clone());
             Ok(())

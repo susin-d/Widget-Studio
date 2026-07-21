@@ -11,7 +11,7 @@ const typeAliases: Record<string, WidgetKind> = {
   links: "links", link: "links", calendar: "calendar", mindmap: "mindmap", pomodoro: "pomodoro",
   timer: "pomodoro", worldclock: "worldclock", stickynotes: "stickynotes", sticky: "stickynotes",
   calculator: "calculator", chatbot: "chatbot", ai: "chatbot", custom: "custom", system: "system",
-  browser: "browser", web: "browser", website: "browser"
+  browser: "browser", web: "browser"
 };
 
 const splitPayload = (value: string) => value.split(/\s*\|\s*/, 2).map((part) => part.trim());

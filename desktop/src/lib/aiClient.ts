@@ -102,7 +102,7 @@ export async function completeDesktopChat(
       max_tokens: settings.maxTokens,
       temperature: settings.temperature,
       // OpenAI-compatible providers may support the same extended control used
-      // by the previous backend provider. Keep the value configurable per chat.
+      // by the previous request path. Keep the value configurable per chat.
       reasoning_effort: reasoningEffort as "low" | "medium" | "high",
     });
     const reply = response.choices[0]?.message?.content?.trim();

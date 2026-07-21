@@ -22,7 +22,7 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
   // External sites frequently send X-Frame-Options/CSP headers that block an
   // iframe even though the machine is online. Use a real child webview for
   // every Tauri desktop browser widget; keep iframe preview behavior for the
-  // website/browser preview where Tauri is unavailable.
+  // Browser preview where Tauri is unavailable.
   const nativeWebview = isTauri;
   const webviewTopOffset = overlay ? 30 : 0;
 

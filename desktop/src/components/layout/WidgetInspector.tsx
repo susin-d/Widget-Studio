@@ -128,7 +128,7 @@ function WidgetSpecific({ widget, onOpenDeveloper }: { widget: DesktopWidget; on
     const data = browserWidgetData(widget.data);
     const rawUrl = typeof widget.data?.url === "string" ? widget.data.url : data.url;
     return <div className="space-y-3">
-      <label className="block text-xs text-muted">Website URL
+      <label className="block text-xs text-muted">URL
         <input
           className="mt-1 w-full rounded-md border border-black/10 bg-white/70 p-2 text-text dark:border-white/10 dark:bg-black/20"
           value={rawUrl}

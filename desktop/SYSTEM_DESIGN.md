@@ -4,7 +4,7 @@ Exported: 12 July 2026
 
 ## Product Scope
 
-Desktop Widgets is a Windows 11 widget host built with Tauri v2, React, TypeScript, Zustand, Tailwind CSS, and Rust. It provides a visual editor canvas plus independent transparent desktop overlay windows for clocks, weather, calendars, task managers, custom widgets, mindmaps, calculators, and system monitors. The application supports cloud layout synchronization and user authentication with a FastAPI + PostgreSQL backend.
+Desktop Widgets is a Windows 11 widget host built with Tauri v2, React, TypeScript, Zustand, Tailwind CSS, and Rust. It provides a visual editor canvas plus independent transparent desktop overlay windows for clocks, weather, calendars, task managers, custom widgets, mindmaps, calculators, and system monitors. All layout, settings, and widget data are stored locally on the device.
 
 ---
 
@@ -21,17 +21,6 @@ flowchart TB
         DebouncePersist <--> LocalJSON[App Data layout.json]
     end
 
-    subgraph Sync Backend
-        UI <-->|JWT / REST API| FastAPI[FastAPI Server]
-        FastAPI <--> DB[(PostgreSQL)]
-        FastAPI <--> GoogleOAuth[Google OAuth Provider]
-    end
-
-    subgraph Desktop Protocol Handler
-        GoogleOAuth -->|Redirect Code| FastAPI
-        FastAPI -->|Deep Link protocol widgetapp://auth/callback| RustHost
-        RustHost -->|Inject Token| UI
-    end
 ```
 
 ---
@@ -160,12 +149,6 @@ sequenceDiagram
 ---
 
 ## Native Implementation Details
-
-### Custom Deep Link Protocol
-Tauri registers the `widgetapp://` custom protocol handler.
-1. When a user clicks **Login with Google** in the desktop client, the browser navigates to the FastAPI login.
-2. The server processes the authorization and redirects to `widgetapp://auth/callback?token=<jwt>&email=<email>`.
-3. The native Tauri application intercepts the protocol command, reads the arguments, and injects the session credentials back into the Zustand authentication store.
 
 ### Zero Console Popup Strategy
 To prevent command windows (PowerShell/CMD) from flickering or popping up during system executions (like autostart registry configuration or helper scripts), all process executions are spawned with appropriate window creation flags on Windows:

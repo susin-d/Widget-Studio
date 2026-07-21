@@ -75,7 +75,7 @@ desktop/
 │   ├── lib/              # Styling, colors, native hooks
 │   ├── store/            # Zustand layout/theme state management
 │   └── types/            # TypeScript models
-└── src-tauri/            # Rust Backend Code
+└── src-tauri/            # Native Rust Code
     ├── src/
     │   ├── commands.rs   # Window handling, positioning, startup options
     │   ├── main.rs       # Entrypoint & custom protocol handler

@@ -1,10 +1,8 @@
-import { ArrowUpRight, Bot, Check, CheckSquare, Cloud, Cpu, Download, Eye, EyeOff, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Pin, Plus, Play, RotateCw, ShieldCheck, Sparkles, Star, Trash2, WandSparkles, Zap, Chrome, Lock, LogOut, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Cloud, Cpu, Download, Eye, EyeOff, HardDrive, Heart, LayoutGrid, MemoryStick, MoreHorizontal, Pin, Plus, Play, RotateCw, ShieldCheck, Sparkles, Star, Trash2, WandSparkles, Zap, Chrome, Lock, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ManagerView } from "./ManagerNavigation";
 import type { DesktopWidget, WidgetKind } from "../../types/widget";
 import { useManagerStore } from "../../store/managerStore";
-import { useAuthStore, BACKEND_URL } from "../../store/authStore";
-import { savePersistedState } from "../../lib/storage";
 import { WidgetBuilder } from "../developer/WidgetBuilder";
 import { useSystemInfo } from "../../hooks/useSystemInfo";
 import { CUSTOM_WIDGET_PERMISSIONS, normalizeCustomWidgetData, type CustomWidgetPermission } from "../../types/customWidget";
@@ -45,11 +43,11 @@ function SyncPage({ widgets, settings }: { widgets: DesktopWidget[]; settings: a
         <div className="space-y-3.5 text-xs text-muted leading-relaxed">
           <p>
             <b>💻 100% Local-First</b><br />
-            Your widget layout, coordinates, styles, and data are stored safely on your machine without relying on external backends or cloud servers.
+            Your widget layout, coordinates, styles, and data are stored safely on this machine.
           </p>
           <p>
             <b>🛡️ Privacy First</b><br />
-            No network authentication or remote server persistence is required.
+            No account or network connection is required.
           </p>
         </div>
       </Panel>
@@ -59,7 +57,6 @@ function SyncPage({ widgets, settings }: { widgets: DesktopWidget[]; settings: a
 
 function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopWidget[]; onOpenWidgets: () => void; onSetWidgets?: (widgets: DesktopWidget[]) => void }) {
   const { backup, restoreBackup, lastBackup, notices } = useManagerStore();
-  const { token, syncStatus, lastSyncedAt } = useAuthStore();
   const systemInfo = useSystemInfo();
   const sysCpu = systemInfo ? Math.round(systemInfo.cpu_usage) : null;
   const sysRam = systemInfo ? Math.round((systemInfo.ram_used / Math.max(systemInfo.ram_total, 1)) * 100) : null;
@@ -100,7 +97,7 @@ function Dashboard({ widgets, onOpenWidgets, onSetWidgets }: { widgets: DesktopW
           <Quick label="Import layout" icon={<Download/>} onClick={() => alert("Navigate to Desktop Layouts to import/export presets.")}/>
         </div>
       </Panel>
-       <Panel title="Sync status"><div className="sync-hero"><Cloud size={30}/><div><b>{!token ? "Local only" : syncStatus === "synced" ? "All changes synced" : `Cloud sync ${syncStatus}`}</b><p>{!token ? "Sign in to sync" : lastSyncedAt ? `Last sync ${lastSyncedAt}` : "Cloud account connected"}</p></div></div></Panel>
+       <Panel title="Storage status"><div className="sync-hero"><HardDrive size={30}/><div><b>Local storage active</b><p>Changes are saved on this device.</p></div></div></Panel>
       <Panel title="Last backup"><div className="sync-hero"><HardDrive size={30}/><div><b>{lastBackup ? new Date(lastBackup).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "No backups"}</b><p>{lastBackup ? new Date(lastBackup).toLocaleDateString() : "Save preset to protect state"}</p></div></div></Panel>
     </div>
   </Page>;
@@ -270,7 +267,7 @@ function AIAgents({ widgets, onSetWidgets }: { widgets: DesktopWidget[]; onSetWi
   return <Page title="AI Agent" subtitle="Control widget content, layout, visibility, and lifecycle from one command center.">
     <div className="grid grid-cols-2 gap-4 max-w-4xl">
       <section className="content-panel col-span-2 border-accent/20 bg-accent/[0.04]">
-        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><Sparkles size={19}/></div><div><b className="block">Full widget control</b><p className="mt-1 text-xs text-muted">Commands run locally against the current widget state and persist through the normal local/cloud sync flow.</p></div></div>
+        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><Sparkles size={19}/></div><div><b className="block">Full widget control</b><p className="mt-1 text-xs text-muted">Commands run locally against the current widget state and persist through local storage.</p></div></div>
         <div className="mt-4 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runCommand(); }} placeholder="Try: add link: OpenAI | https://openai.com" className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"/><button onClick={runCommand} disabled={!command.trim()} className="primary-action"><Play size={14}/> Run</button></div>
         <p className="mt-3 text-xs font-medium text-accent">{message}</p>
       </section>
@@ -521,7 +518,7 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
 
   if (view === "sync") {
     return (
-      <Page title="Backup & Sync" subtitle="Preserve layout presets and widget configurations locally or in remote environments.">
+      <Page title="Backup & Restore" subtitle="Preserve layout presets and widget configurations with local JSON files.">
         <SyncPage widgets={widgets} settings={settings} onSetWidgets={onSetWidgets} />
       </Page>
     );

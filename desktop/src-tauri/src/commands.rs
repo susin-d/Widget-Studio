@@ -1,6 +1,6 @@
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use std::{
     fs,
     path::PathBuf,
@@ -114,9 +114,17 @@ pub async fn complete_ai_chat(request: AiChatRequest) -> Result<String, String> 
     parsed
         .choices
         .into_iter()
-        .find_map(|choice| choice.message.content.filter(|content| !content.trim().is_empty()))
+        .find_map(|choice| {
+            choice
+                .message
+                .content
+                .filter(|content| !content.trim().is_empty())
+        })
         .map(|content| content.trim().to_string())
-        .ok_or_else(|| "The AI provider returned no response text. Increase Max output tokens and try again.".to_string())
+        .ok_or_else(|| {
+            "The AI provider returned no response text. Increase Max output tokens and try again."
+                .to_string()
+        })
 }
 
 #[tauri::command]

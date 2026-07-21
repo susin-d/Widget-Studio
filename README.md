@@ -14,7 +14,7 @@
 
 ## ✨ Features
 
-- 💻 **100% Local-First**: Offline-ready with zero mandatory external backends or remote servers required.
+- 💻 **100% Local-First**: Offline-ready with no mandatory external services.
 - 🪟 **Native Windows 11 Desktop Overlays**: Powered by **Tauri v2**, Rust, React, and TypeScript.
 - 🎨 **Rich Glassmorphism & Custom Themes**: Windows 11-inspired acrylic glass background options, customizable blur, corner radius, and accent colors.
 - 🧩 **Built-in Widgets**:
