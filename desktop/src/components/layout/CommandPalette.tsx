@@ -104,7 +104,7 @@ export function CommandPalette({ widgets, onClose, onView, onCreateWidget, onOpe
   return (
     <div className="command-backdrop" onPointerDown={onClose}>
       <section
-        className="command-palette"
+        className="command-palette animate-scale-in"
         role="dialog"
         aria-modal="true"
         aria-label="Search workspace"

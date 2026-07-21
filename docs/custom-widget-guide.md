@@ -1,58 +1,55 @@
-# Custom widget guide
+# Custom Widget Guide
 
-Widget Studio lets you create a custom widget without leaving the app. Open **Dev tools** and choose **Create a custom widget**.
+Widget Studio allows users and developers to create, test, and publish custom widgets directly inside the application.
 
-## 1. Choose a builder mode
+## 🛠️ Accessing the Builder
 
-Use **Visual builder** when you want to assemble a widget from supported blocks:
+1. Open **Dev tools** from the sidebar navigation.
+2. Select **Create a custom widget**.
 
-- Container and Row for layout
-- Heading and Text for content
-- Button and Link for interactions
-- Image for remote HTTP(S) images
-- Spacer for controlled whitespace
+---
 
-Select a container before adding a block to place the new block inside it. Select a block to edit its text, dimensions, colors, spacing, and action. Use the structure controls to move or delete blocks.
+## 🎨 1. Builder Modes
 
-Use **Code** when you need custom behavior. The editor accepts HTML, CSS, and JavaScript. Code mode becomes authoritative for the current draft; switching back to Visual builder restores the last visual layout and discards code-only changes after confirmation.
+### Visual Builder
+Assemble widgets visually using interactive UI blocks:
+- **Layout**: Container, Row
+- **Content**: Heading, Text
+- **Actions**: Button, Link
+- **Media**: Remote HTTP(S) Image
+- **Spacing**: Spacer
 
-## 2. Preview and publish
+### Code Editor
+For complete flexibility, switch to **Code mode** to write raw **HTML**, **CSS**, and **JavaScript**. Code mode gives full control over styles and DOM manipulation inside the widget container.
 
-The preview is rendered in the same sandbox used by the published widget. Validation errors appear below the preview, and runtime errors appear inside the preview. Drafts are saved locally while you work.
+---
 
-Click **Publish widget** to add a new custom widget or update the widget being edited. Published source is stored in the existing workspace layout and is included in the existing local/cloud synchronization and JSON export flows.
+## 🔒 2. Security Sandbox & Permission Model
 
-On desktop, open the widget from the canvas or active-widget list and choose **Edit in builder** or **Open overlay**. The website can preview and sync the widget but cannot create a Windows desktop overlay.
+Custom widgets execute inside a sandboxed `<iframe>` (`sandbox="allow-scripts"`). Custom code cannot access window globals or Tauri internals directly.
 
-## 3. Protected APIs
+To use system capabilities, use the `WidgetStudio.request` API:
 
-Custom code runs in an iframe with `sandbox="allow-scripts"`. It cannot call Tauri commands or access the parent application directly. Protected capabilities prompt the user on first use.
-
-```js
+```javascript
 WidgetStudio.request("notifications", {
-  title: "Widget Studio",
-  body: "Hello from my widget"
+  title: "Pomodoro Timer",
+  body: "Time for a 5-minute break!"
 });
 ```
 
-Available capabilities:
+### Supported Capabilities & Permissions
 
-- `network`: HTTPS requests only; credentials are omitted.
-- `clipboard`: copy text to the system clipboard.
-- `notifications`: create a desktop notification after browser approval.
-- `openExternal`: open an HTTP(S) URL in the default browser.
+| Permission Name | Description |
+| --- | --- |
+| `network` | Perform HTTPS requests to external APIs. |
+| `clipboard` | Copy text data to system clipboard. |
+| `notifications` | Send desktop system notifications. |
+| `openExternal` | Open approved HTTP(S) links in the system default browser. |
 
-Requests can fail when the user denies permission or when a URL does not meet the capability restriction. Handle them as promises:
+Permissions prompt the user for authorization on first use.
 
-```js
-WidgetStudio.request("openExternal", { url: "https://example.com" })
-  .catch((error) => console.error(error));
-```
+---
 
-## Troubleshooting
+## 💾 3. Persistence & Export
 
-- **JavaScript error:** Check the JavaScript panel for syntax errors. The preview reports the error before publishing.
-- **Button does nothing:** Confirm that the button action is not set to “No action” and that the requested capability was approved.
-- **Image is blank:** Use an HTTP(S) image URL. JavaScript URLs and unsupported schemes are rejected.
-- **Widget disappeared after reload:** Publish the draft; drafts are local recovery data and are not workspace widgets until published.
-- **Permission prompt appears again:** Use **Reset permissions** in the widget inspector to intentionally clear the saved decisions.
+Custom widgets are saved inside your local workspace configuration state. You can export and share your widgets via **Import & Export** in JSON format across machines.

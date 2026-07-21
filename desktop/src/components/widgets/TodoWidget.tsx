@@ -159,11 +159,11 @@ export function TodoWidget({ widget }: { widget: DesktopWidget }) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
-                      const next = prompt("Enter deadline (e.g. 2026-07-12T20:00) or leave blank to clear:", item.deadline || "");
+                      const next = window.prompt("Enter deadline (YYYY-MM-DDTHH:mm) or leave blank:", item.deadline || "");
                       if (next !== null) setDeadline(item.id, next);
                     }}
                     title="Change deadline"
-                    className="hidden group-hover/todo:block text-muted hover:text-accent p-1 rounded"
+                    className="hidden group-hover/todo:block text-muted hover:text-accent p-1 rounded transition"
                   >
                     <Calendar size={12} />
                   </button>
@@ -172,19 +172,19 @@ export function TodoWidget({ widget }: { widget: DesktopWidget }) {
                     type="button"
                     aria-label={`Delete task: ${item.text || "Untitled task"}`}
                     title="Delete task"
-                    className="shrink-0 rounded p-1 text-red-500 hover:bg-black/5 hover:text-red-700 dark:hover:bg-white/5"
+                    className="shrink-0 rounded p-1 text-red-500 hover:bg-black/5 hover:text-red-700 dark:hover:bg-white/5 transition"
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
               </div>
               {item.deadline && (
-                <div className={`flex items-center gap-1 pl-6 text-[10px] ${isOverdue(item) ? "text-red-500 font-semibold" : "text-muted"}`}>
+                <div className={`flex items-center gap-1 pl-6 text-[10px] ${isOverdue(item) ? "text-red-500 font-semibold animate-pulse" : "text-muted"}`}>
                   <Clock size={10} />
                   <span
                     className="cursor-pointer hover:underline"
                     onClick={() => {
-                      const next = prompt("Enter deadline (e.g. 2026-07-12T20:00) or leave blank to clear:", item.deadline || "");
+                      const next = window.prompt("Enter deadline (YYYY-MM-DDTHH:mm) or leave blank:", item.deadline || "");
                       if (next !== null) setDeadline(item.id, next);
                     }}
                   >

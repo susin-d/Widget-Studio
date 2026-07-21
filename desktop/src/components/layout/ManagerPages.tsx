@@ -15,199 +15,41 @@ import { AiProviderSection } from "../settings/AiProviderSection";
 
 
 
-function SyncPage({ widgets, settings, onSetWidgets }: { widgets: DesktopWidget[]; settings: any; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
-  const { token, email, loading, error, syncStatus, lastSyncedAt, login, signup, logout } = useAuthStore();
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [formEmail, setFormEmail] = useState("");
-  const [formPassword, setFormPassword] = useState("");
-  const [formError, setFormError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError("");
-    if (!formEmail || !formPassword) {
-      setFormError("Please fill in all fields.");
-      return;
-    }
-    try {
-      if (isSignUp) {
-        await signup(formEmail, formPassword);
-        setSuccessMsg("Account created and synced!");
-      } else {
-        await login(formEmail, formPassword);
-        setSuccessMsg("Logged in and synced!");
-      }
-      setTimeout(() => setSuccessMsg(""), 4000);
-    } catch (err: any) {
-      setFormError(err.message || "Authentication failed.");
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    const url = `${BACKEND_URL}/api/auth/google?client=desktop`;
-    if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
-      try {
-        const { open } = await import("@tauri-apps/plugin-shell");
-        await open(url);
-      } catch (err) {
-        window.open(url, "_blank");
-      }
-    } else {
-      window.open(url, "_blank");
-    }
-  };
-
-  const handleSyncNow = async () => {
-    setFormError("");
-    try {
-      const state = { version: 2, widgets, settings };
-      const synced = await savePersistedState(state);
-      if (!synced) {
-        setFormError("Cloud sync failed. Check the sync status and try again.");
-        return;
-      }
-      setSuccessMsg("Synchronized with cloud!");
-      setTimeout(() => setSuccessMsg(""), 4000);
-    } catch (err) {
-      setFormError("Failed to trigger manual sync.");
-    }
-  };
-
-  if (token) {
-    return (
-      <div className="grid grid-cols-2 gap-4 max-w-3xl">
-        <Panel title="Cloud Sync Active">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
-              <Cloud size={24} className="animate-pulse" />
-              <div>
-                <b className="block text-sm">Account Connected</b>
-                <span className="text-xs opacity-80">{email}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                <span className="text-muted">Sync Status</span>
-                <span className={`font-semibold ${
-                  syncStatus === "synced" ? "text-emerald-500" :
-                  syncStatus === "syncing" ? "text-amber-500 animate-spin" :
-                  syncStatus === "offline" ? "text-blue-500" : "text-red-500"
-                }`}>
-                  {syncStatus.toUpperCase()}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
-                <span className="text-muted">Last Cloud Sync</span>
-                <span className="font-semibold">{lastSyncedAt || "Not synced yet"}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={handleSyncNow} className="primary-action text-xs flex items-center gap-1.5">
-                <RefreshCw size={13} className={syncStatus === "syncing" ? "animate-spin" : ""} />
-                Sync Now
-              </button>
-              <button onClick={logout} className="flex items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 px-3 py-2 text-xs font-semibold hover:bg-red-500/20">
-                <LogOut size={13} className="mr-1.5" />
-                Sign Out
-              </button>
-            </div>
-            {successMsg && <p className="text-xs font-semibold text-emerald-500">{successMsg}</p>}
-            {formError && <p className="text-xs font-semibold text-red-500">{formError}</p>}
-          </div>
-        </Panel>
-
-        <Panel title="Sync Information">
-          <p className="text-xs text-muted leading-relaxed">
-            Your widget layout, coordinates, styles, and custom data (notes, links, tasks) are securely backed up in the cloud. Changes made on this machine are synced automatically. Log into another device using the same account to instantly restore your layout.
-          </p>
-        </Panel>
-      </div>
-    );
-  }
-
+function SyncPage({ widgets, settings }: { widgets: DesktopWidget[]; settings: any; onSetWidgets: (widgets: DesktopWidget[]) => void }) {
   return (
     <div className="grid grid-cols-2 gap-4 max-w-3xl">
-      <Panel title={isSignUp ? "Create a Cloud Account" : "Sign In to Sync Layout"}>
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          <div>
-            <label className="block text-xs text-muted mb-1">Email Address</label>
-            <input
-              type="email"
-              value={formEmail}
-              onChange={(e) => setFormEmail(e.target.value)}
-              placeholder="name@example.com"
-              className="w-full px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-sm focus:outline-none focus:border-accent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1">Password</label>
-            <input
-              type="password"
-              value={formPassword}
-              onChange={(e) => setFormPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-sm focus:outline-none focus:border-accent"
-            />
-          </div>
-
-          {(formError || error) && (
-            <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400">
-              {formError || error}
+      <Panel title="Local Storage Active">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+            <HardDrive size={24} />
+            <div>
+              <b className="block text-sm">Offline Local Storage</b>
+              <span className="text-xs opacity-80">Saved directly on this device</span>
             </div>
-          )}
+          </div>
 
-          <div className="flex flex-col gap-2 pt-1">
-            <button type="submit" disabled={loading} className="primary-action w-full justify-center text-xs py-2">
-              {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
-            </button>
-            
-            <div className="flex items-center my-1.5">
-              <hr className="flex-1 border-black/5 dark:border-white/5" />
-              <span className="px-2 text-[10px] text-muted uppercase tracking-wider">or</span>
-              <hr className="flex-1 border-black/5 dark:border-white/5" />
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
+              <span className="text-muted">Storage Mode</span>
+              <span className="font-semibold text-emerald-500">100% LOCAL</span>
             </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3 py-2 text-xs font-semibold hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition"
-            >
-              <Chrome size={14} className="text-red-500" />
-              Continue with Google
-            </button>
+            <div className="flex justify-between py-1 border-b border-black/5 dark:border-white/5">
+              <span className="text-muted">Active Widgets</span>
+              <span className="font-semibold">{widgets.length}</span>
+            </div>
           </div>
-
-          <div className="text-center pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setFormError("");
-              }}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-            >
-              {isSignUp ? "Already have an account? Sign in" : "Need an account? Create one"}
-            </button>
-          </div>
-        </form>
+        </div>
       </Panel>
 
-      <Panel title="Why cloud backup?">
+      <Panel title="Local Storage Information">
         <div className="space-y-3.5 text-xs text-muted leading-relaxed">
           <p>
-            <b>💻 Sync Across Devices</b><br />
-            Synchronize your clock, notes, systems and configurations across multiple machines instantly.
+            <b>💻 100% Local-First</b><br />
+            Your widget layout, coordinates, styles, and data are stored safely on your machine without relying on external backends or cloud servers.
           </p>
           <p>
-            <b>🛡️ Prevent Data Loss</b><br />
-            Keep your settings safe. Even if your operating system or local disk fails, your canvas remains fully recoverable.
-          </p>
-          <p>
-            <b>⚡ Real-time Saving</b><br />
-            Any changes you make to sizing, layout and positions are pushed instantly to a secure PostgreSQL database.
+            <b>🛡️ Privacy First</b><br />
+            No network authentication or remote server persistence is required.
           </p>
         </div>
       </Panel>
@@ -553,9 +395,18 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
   }
 
   if (view === "themes") {
+    const THEME_PRESETS = [
+      { id: "berry-pop", name: "Berry Pop", color: "#8b5cf6" },
+      { id: "citrus-splash", name: "Citrus Splash", color: "#facc15" },
+      { id: "ocean-candy", name: "Ocean Candy", color: "#3b82f6" },
+      { id: "lavender-dream", name: "Lavender Dream", color: "#ec4899" },
+      { id: "mint-sorbet", name: "Mint Sorbet", color: "#5eead4" },
+      { id: "midnight-neon", name: "Midnight Neon", color: "#22d3ee" }
+    ];
+
     return (
-      <Page title="Theme Studio" subtitle="Fine tune the acrylic layout, shadows, colors, and margins.">
-        <div className="grid grid-cols-2 gap-4 max-w-3xl">
+      <Page title="Theme Studio" subtitle="Fine tune the acrylic glass layout, blur radius, shadows, and custom colors.">
+        <div className="grid grid-cols-2 gap-4 max-w-4xl">
           <Panel title="Glassmorphism & Style">
             <div className="space-y-4 text-xs">
               <label className="developer-field">
@@ -575,21 +426,61 @@ function GenericPage({ view, widgets, onSetWidgets }: { view: ManagerView; widge
               </label>
             </div>
           </Panel>
-          <Panel title="Accent Palette">
+
+          <Panel title="Accent & Palette Presets">
             <div className="space-y-4 text-xs">
-              <label className="developer-field">
+              <div>
+                <span className="font-semibold block mb-2">Color Theme Palette Presets</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {THEME_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => updateSetting("colorTheme", preset.id as any)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left transition ${
+                        settings.colorTheme === preset.id
+                          ? "border-accent bg-accent/10 font-bold"
+                          : "border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      <span className="h-3.5 w-3.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: preset.color }} />
+                      <span className="truncate text-[11px]">{preset.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="developer-field pt-2 border-t border-black/5 dark:border-white/5">
                 <span>Accent Color Override</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <input type="color" value={settings.accentColor} onChange={(e) => updateSetting("accentColor", e.target.value)} className="h-8 w-12 cursor-pointer rounded border-0 bg-transparent" />
-                  <span className="font-mono text-muted">{settings.accentColor}</span>
+                  <span className="font-mono text-xs font-semibold">{settings.accentColor}</span>
                 </div>
               </label>
-              <div className="rounded-lg bg-black/5 p-2 dark:bg-white/5">
-                <span className="font-semibold block mb-1">Color Theme Preset</span>
-                <div className="text-[11px] text-muted">Currently active: <span className="font-semibold text-accent">{settings.colorTheme}</span></div>
-              </div>
             </div>
           </Panel>
+
+          <section className="content-panel col-span-2">
+            <span className="font-semibold text-xs block mb-3">Live Widget Glass Preview</span>
+            <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-blue-500/20 flex items-center justify-center">
+              <div
+                className="acrylic p-4 w-64 shadow-xl border border-white/40 dark:border-white/10 flex flex-col gap-2 text-xs"
+                style={{
+                  borderRadius: `${settings.cornerRadius}px`,
+                  backdropFilter: `blur(${settings.blurIntensity}px)`
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Sample Widget</span>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: settings.accentColor }} />
+                </div>
+                <p className="text-muted text-[11px]">Real-time preview of glass blur, corner radius, and accent styling.</p>
+                <button type="button" className="mt-2 py-1 px-2 text-white font-medium text-[10px] rounded-md transition hover:brightness-110" style={{ backgroundColor: settings.accentColor }}>
+                  Interactive Button
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       </Page>
     );

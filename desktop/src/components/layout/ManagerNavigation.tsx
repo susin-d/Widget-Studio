@@ -32,7 +32,7 @@ export function ManagerNavigation({ view, onView, onSearch }: { view: ManagerVie
         <button
           onClick={onSearch}
           aria-label="Search workspace"
-          className="flex w-full items-center gap-2 rounded-lg border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.06] px-3 py-2 text-xs text-muted transition hover:bg-black/[0.06] dark:hover:bg-white/[0.1]"
+          className="flex w-full items-center gap-2 rounded-lg border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.06] px-3 py-2 text-xs text-muted transition-all hover:bg-black/[0.06] dark:hover:bg-white/[0.1] hover-lift"
         >
           <Search size={13} />
           <span>Search workspace</span>
@@ -45,7 +45,7 @@ export function ManagerNavigation({ view, onView, onSearch }: { view: ManagerVie
         <div className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[.14em] text-muted">Workspace</div>
         <div className="space-y-0.5">
           {primary.map(item => (
-            <button key={item.id} onClick={() => onView(item.id)} className={`nav-item ${view === item.id ? "active" : ""}`}>
+            <button key={item.id} onClick={() => onView(item.id)} className={`nav-item transition-all ${view === item.id ? "active" : ""}`}>
               {item.icon}
               <span>{item.label}</span>
             </button>
@@ -56,11 +56,16 @@ export function ManagerNavigation({ view, onView, onSearch }: { view: ManagerVie
       <div className="flex-1" />
 
       {/* System nav — compact */}
-      <div className="border-t border-black/8 px-2 py-2">
+      <div className="border-t border-black/8 px-2 py-2 dark:border-white/8">
         <div className="space-y-0.5">
           {secondary.map(item => (
-            <button key={item.id} onClick={() => onView(item.id)} className={`nav-item ${view === item.id ? "active" : ""}`}>
-              {item.icon}
+            <button key={item.id} onClick={() => onView(item.id)} className={`nav-item transition-all ${view === item.id ? "active" : ""}`}>
+              <div className="relative flex items-center">
+                {item.icon}
+                {item.id === "notifications" && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent animate-pulse" />
+                )}
+              </div>
               <span>{item.label}</span>
             </button>
           ))}

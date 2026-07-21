@@ -19,15 +19,20 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
   const [loading, setLoading] = useState(true);
   const [iframeError, setIframeError] = useState(false);
   const data = browserWidgetData(widget.data) as BrowserWidgetData;
-  const nativeOverlay = isTauri && overlay;
+  // External sites frequently send X-Frame-Options/CSP headers that block an
+  // iframe even though the machine is online. Use a real child webview for
+  // every Tauri desktop browser widget; keep iframe preview behavior for the
+  // website/browser preview where Tauri is unavailable.
+  const nativeWebview = isTauri;
+  const webviewTopOffset = overlay ? 30 : 0;
 
   useEffect(() => {
     setLoading(true);
     setIframeError(false);
-  }, [data.url, nativeOverlay]);
+  }, [data.url, nativeWebview, overlay]);
 
   useEffect(() => {
-    if (!nativeOverlay || !hostRef.current) return;
+    if (!nativeWebview || !hostRef.current) return;
 
     const host = hostRef.current;
     const label = `browser-${widget.id}`;
@@ -36,10 +41,10 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
     const syncBounds = () => {
       if (!webview) return;
       const rect = host.getBoundingClientRect();
-      void webview.setPosition(new LogicalPosition(0, 30)).catch(() => undefined);
+      void webview.setPosition(new LogicalPosition(0, webviewTopOffset)).catch(() => undefined);
       void webview.setSize(new LogicalSize(
         Math.max(1, Math.round(rect.width)),
-        Math.max(1, Math.round(rect.height - 30))
+        Math.max(1, Math.round(rect.height - webviewTopOffset))
       )).catch(() => undefined);
     };
 
@@ -47,9 +52,9 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
       webview = new Webview(getCurrentWindow(), label, {
         url: data.url,
         x: 0,
-        y: 30,
+        y: webviewTopOffset,
         width: Math.max(1, host.clientWidth || widget.rect.width),
-        height: Math.max(1, (host.clientHeight || widget.rect.height) - 30),
+        height: Math.max(1, (host.clientHeight || widget.rect.height) - webviewTopOffset),
         focus: false,
         dragDropEnabled: false
       });
@@ -67,7 +72,7 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
       if (!webview) return;
       void webview.close().catch(() => undefined);
     };
-  }, [data.url, nativeOverlay, widget.id]);
+  }, [data.url, nativeWebview, overlay, webviewTopOffset, widget.id]);
 
   const startDragging = (event: PointerEvent) => {
     if (event.button !== 0) return;
@@ -75,16 +80,16 @@ export function BrowserWidget({ widget, overlay = false }: BrowserWidgetProps) {
     void getCurrentWindow().startDragging().catch(() => undefined);
   };
 
-  if (nativeOverlay) {
+  if (nativeWebview) {
     return (
-      <div ref={hostRef} style={{ width: widget.rect.width, height: widget.rect.height }} className="relative overflow-hidden bg-white">
-        <div
+      <div ref={hostRef} style={overlay ? { width: widget.rect.width, height: widget.rect.height } : undefined} className="relative h-full w-full overflow-hidden bg-white">
+        {overlay && <div
           className="absolute inset-x-0 top-0 z-10 flex h-[30px] cursor-move items-center justify-between bg-black/30 px-2 text-[10px] text-white/75 backdrop-blur-sm"
           onPointerDown={startDragging}
         >
           <span className="truncate">{data.url}</span>
           <span className="ml-2 shrink-0">Browser</span>
-        </div>
+        </div>}
       </div>
     );
   }

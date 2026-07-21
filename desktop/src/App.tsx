@@ -350,17 +350,39 @@ export function App() {
 
   if (!settings.onboardingComplete) {
     return (
-      <main className="flex h-full items-center justify-center bg-surface p-8">
-        <section className="max-w-xl rounded-2xl bg-panel/90 p-8 shadow-win">
-          <div className="mb-5 flex items-center gap-3">
-            <img src="/widget-studio-logo.png" alt="Widget Studio" className="app-logo h-12 w-12 rounded-2xl" />
+      <main className="flex h-full items-center justify-center bg-surface p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-pink-500/10 pointer-events-none" />
+        <section className="animate-scale-in max-w-xl rounded-3xl border border-white/40 dark:border-white/10 bg-panel/80 p-8 shadow-2xl backdrop-blur-2xl relative z-10">
+          <div className="mb-6 flex items-center gap-4">
+            <img src="/app-logo.png" alt="Widget Studio" className="h-14 w-14 rounded-2xl shadow-md" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Welcome to</p>
-              <h1 className="text-2xl font-semibold">Widget Studio</h1>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">Welcome to</p>
+              <h1 className="text-3xl font-extrabold tracking-tight">Widget Studio</h1>
             </div>
           </div>
-          <p className="mt-3 text-muted">Add lightweight Windows 11-style widgets, move them around your desktop, and tune the glass, theme, and layout to match your workflow.</p>
-          <Button className="mt-6" variant="primary" onClick={() => updateSetting("onboardingComplete", true)}>Start customizing</Button>
+          
+          <p className="text-sm text-muted leading-relaxed mb-6">
+            Your personal, 100% local Windows 11 widget workspace. Drag, scale, customize themes, and float widgets seamlessly over your desktop.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 mb-6 text-xs">
+            <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col items-center text-center gap-1.5">
+              <Grid3X3 size={18} className="text-accent" />
+              <span className="font-semibold">Desktop Overlays</span>
+            </div>
+            <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col items-center text-center gap-1.5">
+              <Moon size={18} className="text-purple-500" />
+              <span className="font-semibold">Custom Themes</span>
+            </div>
+            <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col items-center text-center gap-1.5">
+              <AppWindow size={18} className="text-emerald-500" />
+              <span className="font-semibold">100% Local-First</span>
+            </div>
+          </div>
+
+          <Button className="w-full justify-center py-2.5 text-sm font-semibold hover-lift" variant="primary" onClick={() => updateSetting("onboardingComplete", true)}>
+            Start Customizing Workspace
+          </Button>
         </section>
       </main>
     );

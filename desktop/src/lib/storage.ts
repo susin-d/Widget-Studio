@@ -56,54 +56,6 @@ export async function loadLocalPersistedState(): Promise<PersistedState> {
   return localState;
 }
 
-export async function loadPersistedState(): Promise<PersistedState> {
-  // Use the local layout immediately, then let the main window reconcile with cloud state.
-  const localState = await loadLocalPersistedState();
-
-  // If user has active cloud session, fetch from cloud
-  const { token, setSyncStatus, setLastSyncedAt, logout } = useAuthStore.getState();
-  if (token) {
-    try {
-      setSyncStatus("syncing");
-      const res = await fetchWithTimeout(`${BACKEND_URL}/api/sync/layout`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const cloudState = await res.json();
-        const sanitizedCloud = sanitize(cloudState);
-        lastCloudUpdatedAt = typeof cloudState.updated_at === "string" ? cloudState.updated_at : null;
-        // Sync local storage cache
-        if (isTauri) {
-          await nativeApi.saveLayout(sanitizedCloud);
-        } else {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedCloud));
-        }
-        setSyncStatus("synced");
-        setLastSyncedAt(new Date().toLocaleTimeString());
-        return sanitizedCloud;
-      } else if (res.status === 401) {
-        resetCloudSyncCursor();
-        logout();
-      } else {
-        setSyncStatus("error");
-      }
-    } catch (error) {
-      console.warn("Could not load layout from backend, falling back to local layout", error);
-      setSyncStatus("offline");
-    }
-  }
-
-  if (!token) resetCloudSyncCursor();
-
-  return localState;
-}
-
-export async function savePersistedState(state: PersistedState): Promise<boolean> {
-  const localSaveSucceeded = await saveLocalPersistedState(state);
-  const cloudSaveSucceeded = await syncPersistedStateToCloud(state);
-  return localSaveSucceeded && cloudSaveSucceeded;
-}
-
 export async function saveLocalPersistedState(state: PersistedState): Promise<boolean> {
   const safeState = sanitize(state);
   try {
@@ -116,27 +68,19 @@ export async function saveLocalPersistedState(state: PersistedState): Promise<bo
     console.error("Local save failed", err);
     return false;
   }
-
   return true;
 }
 
-export async function syncPersistedStateToCloud(state: PersistedState): Promise<boolean> {
-  cloudSyncQueuedState = state;
-  if (cloudSyncInFlight) return cloudSyncInFlight;
+export async function loadPersistedState(): Promise<PersistedState> {
+  return loadLocalPersistedState();
+}
 
-  cloudSyncInFlight = (async () => {
-    let result = true;
-    while (cloudSyncQueuedState) {
-      const nextState = cloudSyncQueuedState;
-      cloudSyncQueuedState = null;
-      result = await syncPersistedStateToCloudOnce(nextState);
-    }
-    return result;
-  })().finally(() => {
-    cloudSyncInFlight = null;
-    if (cloudSyncQueuedState) void syncPersistedStateToCloud(cloudSyncQueuedState);
-  });
-  return cloudSyncInFlight;
+export async function savePersistedState(state: PersistedState): Promise<boolean> {
+  return saveLocalPersistedState(state);
+}
+
+export async function syncPersistedStateToCloud(_state: PersistedState): Promise<boolean> {
+  return true;
 }
 
 async function syncPersistedStateToCloudOnce(state: PersistedState): Promise<boolean> {
